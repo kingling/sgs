@@ -9,6 +9,7 @@ using Sanguosha.Core.Skills;
 using Sanguosha.Core.Games;
 using Sanguosha.Core.Players;
 using Sanguosha.Core.Heroes;
+using Sanguosha.Core.UI;
 
 namespace Sanguosha.Expansions.SP.Skills
 {
@@ -35,28 +36,12 @@ namespace Sanguosha.Expansions.SP.Skills
                 (p, e, a) => { return p[WuJiCount] >= 3 && p[WuJiAwaken] == 0; },
                 (p, e, a) =>
                 {
-                    var h = a.Source.Hero;
-                    List<ISkill> skills = new List<ISkill>();
-                    ISkill huxiao = null;
-                    foreach (var sk in h.Skills)
-                    {
-                        if (sk is HuXiao)
-                        {
-                            sk.Owner = null;
-                            huxiao = sk;
-                        }
-                        else skills.Add(sk);
-                    }
-                    Trace.Assert(huxiao != null);
                     p[WuJiAwaken]++;
                     p.MaxHealth++;
                     Game.CurrentGame.RecoverHealth(p, p, 1);
-                    a.Source.Hero = new Hero(h.Name, h.IsMale, h.Allegiance, h.MaxHealth, skills);
-                    SkillSetChangedEventArgs args = new SkillSetChangedEventArgs();
-                    args.Source = a.Source;
-                    args.Skills.Add(huxiao);
-                    args.IsLosingSkill = true;
-                    Game.CurrentGame.Emit(GameEvent.PlayerSkillSetChanged, args);
+                    ISkill huxiao = p.LoseHeroSkill("HuXiao", HeroTag);
+                    Trace.Assert(huxiao != null);
+                    Game.CurrentGame.NotificationProxy.NotifyLogEvent(new LogEvent("WuJi", Owner, huxiao), new List<Player>() { Owner });
                 },
                 TriggerCondition.OwnerIsSource
             );

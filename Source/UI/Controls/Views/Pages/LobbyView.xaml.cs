@@ -86,7 +86,40 @@ namespace Sanguosha.UI.Controls
                     ea.Result = false;
                     client.Start(null, LobbyModel.LoginToken);
                     client.RecordStream = FileRotator.CreateFile("./Replays", "SGSREPLAY", ".sgs", 10);
-                    ea.Result = true;
+                    
+                    MainGame game = null;
+
+                    Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
+                    {
+                        try
+                        {
+                            game = new MainGame();
+                            game.OnNavigateBack += (oo, s) =>
+                            {
+                                s.Navigate(this);
+                                this.Reload();
+                            };
+                            game.NetworkClient = client;
+                            if (NavigationService != null)
+                            {
+                                MainGame.BackwardNavigationService = this.NavigationService;
+                            }
+                            else
+                            {
+                                ViewModelBase.IsDetached = true;
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            game = null;
+                        }
+                    });
+
+                    if (game != null)
+                    {
+                        game.Start();
+                        ea.Result = true;
+                    }
                 }
                 catch (Exception e)
                 {
@@ -96,19 +129,17 @@ namespace Sanguosha.UI.Controls
             };
 
             worker.RunWorkerCompleted += (o, ea) =>
-            {
-                busyIndicator.IsBusy = false;
+            {                
                 if ((bool)ea.Result)
                 {
                     chatBox.Document.Blocks.Clear();
-                    LobbyViewModel.Instance.OnChat -= chatEventHandler;
-                    MainGame game = new MainGame();
-                    game.NetworkClient = client;
-                    this.NavigationService.Navigate(game);
+                    LobbyViewModel.Instance.OnChat -= chatEventHandler;                    
+                    this.DataContext = null;                            
                     return;
                 }
                 else
                 {
+                    busyIndicator.IsBusy = false;
                     MessageBox.Show("Failed to create connection for " + LobbyModel.GameServerConnectionString);
                     Trace.Assert(false);
                 }
@@ -174,7 +205,44 @@ namespace Sanguosha.UI.Controls
         public void Reload()
         {
             LobbyModel.OnChat += chatEventHandler;
+            busyIndicator.IsBusy = false;
             LobbyViewModel.Instance.UpdateRooms();
+        }
+
+        private void btnCreateRoomConfirm_Click(object sender, RoutedEventArgs e)
+        {
+            RoomSettings settings = new RoomSettings();
+            settings.IsDualHeroMode = cbDualHero.IsChecked == true;
+            settings.NumberOfDefectors = cbDualDefector.IsChecked == true ? 2 : 1;
+            int[] options1 = { 3, 4, 5, 6 };
+            settings.NumHeroPicks = options1[cbHeroPickCount.SelectedIndex];
+            int[] options2 = { 10, 15, 20, 30 };
+            settings.TimeOutSeconds = options2[cbTimeOutSeconds.SelectedIndex];
+            LobbyModel.CreateRoom(settings);
+            createRoomWindow.Close();
+        }
+
+        private void btnCreateRoomCancel_Click(object sender, RoutedEventArgs e)
+        {
+            createRoomWindow.Close();
+        }
+
+        private void btnCreateRoom_Click(object sender, RoutedEventArgs e)
+        {
+            cbDualHero.IsChecked = false;
+            createRoomWindow.Show();
+        }
+
+        public event NavigationEventHandler OnNavigateBack;
+
+        private void btnGoback_Click(object sender, RoutedEventArgs e)
+        {
+            LobbyViewModel.Instance.Logout();
+            var handle = OnNavigateBack;
+            if (handle != null)
+            {
+                handle(this, NavigationService);
+            }
         }
     }
 

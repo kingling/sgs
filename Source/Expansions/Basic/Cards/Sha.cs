@@ -14,7 +14,7 @@ using Sanguosha.Core.Cards;
 
 namespace Sanguosha.Expansions.Basic.Cards
 {
-    
+
     public class Sha : CardHandler
     {
         public virtual DamageElement ShaDamageElement
@@ -104,7 +104,7 @@ namespace Sanguosha.Expansions.Basic.Cards
             }
             return VerifierResult.Success;
         }
-        
+
 
         protected override VerifierResult Verify(Player source, ICard card, List<Player> targets)
         {
@@ -125,8 +125,56 @@ namespace Sanguosha.Expansions.Basic.Cards
         /// 是否可以使用杀 
         /// </summary>
         public static readonly GameEvent PlayerNumberOfShaCheck = new GameEvent("PlayerNumberOfShaCheck");
-    }
 
+        /// <summary>
+        /// 某玩家对某玩家视为使用一张虚拟的杀，能被技能转化，影响选择的目标，如疠火，朱雀羽扇
+        /// </summary>
+        public static void UseDummyShaTo(Player source, Player target, CardHandler shaType, Prompt prompt, CardAttribute helper = null, bool notifyShaSound = true)
+        {
+            CompositeCard sha = new CompositeCard() { Type = shaType };
+            var v1 = new DummyShaVerifier(target, shaType, helper);
+            ISkill skill;
+            List<Card> cards;
+            List<Player> players;
+            source.AskForCardUsage(prompt, v1, out skill, out cards, out players);
+            GameEventArgs args = new GameEventArgs();
+            args.Source = source;
+            args.Targets = new List<Player>(players);
+            if (target != null) args.Targets.Add(target);
+            args.Skill = skill == null ? new CardWrapper(source, shaType, notifyShaSound) : skill;
+            args.Cards = cards;
+            CompositeCard card = null;
+            if (skill != null)
+            {
+                List<Card> dummyCards = new List<Card>() { new Card() { Type = shaType, Place = new DeckPlace(null, DeckType.None) } };
+                (skill as CardTransformSkill).TryTransform(dummyCards, null, out card);
+                //虚拟的杀是不能有子卡的。
+                card.Subcards.Clear();
+            }
+            //在触发 CommitActionToTargets 的时候，只有在这里，args.Card才会被赋值，且为CompositeCard
+            args.Card = card;
+            if (args.Targets.Count == 0)
+            {
+                foreach (Player p in Game.CurrentGame.AlivePlayers)
+                {
+                    if (p != source && v1.FastVerify(source, skill, cards, new List<Player>() { p }) != VerifierResult.Fail)
+                    {
+                        args.Targets.Add(p);
+                        break;
+                    }
+                }
+            }
+            try
+            {
+                Game.CurrentGame.Emit(GameEvent.CommitActionToTargets, args);
+            }
+            catch (TriggerResultException)
+            {
+                //程序总是不应该执行到这里的
+                Trace.Assert(false);
+            }
+        }
+    }
 
     public class ShaEventArgs : GameEventArgs
     {
@@ -146,4 +194,5 @@ namespace Sanguosha.Expansions.Basic.Cards
             set { targetApproval = value; }
         }
     }
+
 }

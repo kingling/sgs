@@ -20,13 +20,16 @@ namespace Sanguosha.UI.Controls
         }
 
         public BigEquipBorder()
-        {
-            this.Loaded += new System.Windows.RoutedEventHandler(BigEquipBorder_Loaded);
+        {            
         }
 
-        void BigEquipBorder_Loaded(object sender, System.Windows.RoutedEventArgs e)
+        protected override void OnPropertyChanged(System.Windows.DependencyPropertyChangedEventArgs e)
         {
-            IsActive = true;
+            base.OnPropertyChanged(e);
+            if (e.Property == BigEquipBorder.VisibilityProperty)
+            {
+                IsActive = (Visibility == System.Windows.Visibility.Visible);
+            }
         }
 
         public override List<ImageSource> Frames

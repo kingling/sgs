@@ -20,7 +20,7 @@ namespace Sanguosha.Lobby.Core
     [Serializable]
     public struct LoginToken
     {
-        public Guid token;
+        public Guid TokenString { get; set; }
     }
 
     [DataContract(Name = "RoomOperationResult")]
@@ -40,12 +40,21 @@ namespace Sanguosha.Lobby.Core
         Invalid = -5,
     }
 
+    [Serializable]
+    public struct RoomSettings
+    {
+        public int TimeOutSeconds { get; set; }
+        public int NumberOfDefectors { get; set; }
+        public bool IsDualHeroMode { get; set; }
+        public int NumHeroPicks { get; set; }
+    }
+
     [ServiceKnownType("GetKnownTypes", typeof(Helper))]
     [ServiceContract(Namespace = "", CallbackContract = typeof(IGameClient), SessionMode = SessionMode.Required)]
     public interface ILobbyService
     {
         [OperationContract(IsInitiating = true)]
-        LoginStatus Login(int version, string username, out LoginToken token, out Account retAccount, out string reconnectionString);
+        LoginStatus Login(int version, string username, string hash, out LoginToken token, out Account retAccount, out string reconnectionString);
 
         [OperationContract(IsInitiating = false)]
         void Logout(LoginToken token);
@@ -54,7 +63,7 @@ namespace Sanguosha.Lobby.Core
         IEnumerable<Room> GetRooms(LoginToken token, bool notReadyRoomsOnly);
 
         [OperationContract]
-        Room CreateRoom(LoginToken token, string password = null);
+        Room CreateRoom(LoginToken token, RoomSettings settings, string password = null);
 
         [OperationContract]
         RoomOperationResult EnterRoom(LoginToken token, int roomId, bool spectate, string password, out Room room);
@@ -88,6 +97,9 @@ namespace Sanguosha.Lobby.Core
 
         [OperationContract]
         RoomOperationResult Spectate(LoginToken token, int roomId);
+
+        [OperationContract]
+        LoginStatus CreateAccount(string userName, string p);
     }
 
     public interface IGameClient

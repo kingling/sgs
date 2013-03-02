@@ -239,6 +239,7 @@ namespace Sanguosha.UI.Controls
                 card.SetValue(Canvas.ZIndexProperty, zindex + i);
                 card.AddRebaseAnimation(sb, 0.4d);
             }
+            sb.DecelerationRatio = 0.5d;
             sb.Begin(this, HandoffBehavior.Compose);
         }
 
@@ -250,7 +251,7 @@ namespace Sanguosha.UI.Controls
         {
         }
 
-        protected virtual void UnRegisterCardEvents(CardView card)
+        protected virtual void UnregisterCardEvents(CardView card)
         {
         }
 
@@ -285,16 +286,24 @@ namespace Sanguosha.UI.Controls
             rightMost.Y = this.TranslatePoint(new Point(0, this.ActualHeight / 2 - cards[0].Height / 2), canvas).Y;
             foreach (var card in cards)
             {
-                card.CardModel.IsFaded = false;
-                card.SetCurrentPosition(rightMost);
-                rightMost.X += card.ActualWidth;
-                card.Appear(0.3d);
-                Cards.Add(card);
+                if (IsCardConsumer)
+                {
+                    card.Disappear(_cardOpacityChangeAnimationDurationSeconds, true);
+                }
+                else
+                {
+                    card.CardModel.IsFaded = false;
+                    card.SetCurrentPosition(rightMost);
+                    rightMost.X += card.ActualWidth;
+                    card.Appear(0.3d);
+                    Cards.Add(card);
+                    RegisterCardEvents(card);
+                }
             }
             RearrangeCards();
         }
 
-        private static double _cardOpacityChangeAnimationDurationSeconds = 0.5d;
+        private double _cardOpacityChangeAnimationDurationSeconds = 0.5d;
 
         public virtual void AddCards(IList<CardView> cards)
         {
@@ -331,7 +340,7 @@ namespace Sanguosha.UI.Controls
                     _interactingCard = null;
                     _cardInteraction = CardInteraction.None;
                 }
-                UnRegisterCardEvents(card);
+                UnregisterCardEvents(card);
             }
             var nonexisted = new List<CardView>(
                                 from c in cards
@@ -369,7 +378,7 @@ namespace Sanguosha.UI.Controls
         private List<CardView> _cards;
         public IList<CardView> Cards
         {
-            get { return _cards; }
+            get { return _cards; }           
         }
 
         public Rect BoundingBox

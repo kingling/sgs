@@ -10,6 +10,7 @@ using System.Windows.Media;
 using System.Windows.Input;
 using Sanguosha.UI.Animations;
 using Sanguosha.Core.Games;
+using System.Threading;
 
 namespace Sanguosha.UI.Controls
 {
@@ -25,9 +26,66 @@ namespace Sanguosha.UI.Controls
             UpdateCards();
         }
 
-        protected virtual void UpdateCards()
+        internal virtual void UpdateCards()
         {
-            
+            if (PlayerModel == null) return;
+            PlayerModel.HandCards.Clear();
+            PlayerModel.HandCardCount = 0;
+            PlayerModel.WeaponCommand = null;
+            PlayerModel.ArmorCommand = null;
+            PlayerModel.DefensiveHorseCommand = null;
+            PlayerModel.OffensiveHorseCommand = null;
+            PlayerModel.PrivateDecks.Clear();
+
+            var player = PlayerModel.Player;
+            if (player == null) return;
+
+            // HandCards
+            foreach (var card in player.HandCards())
+            {
+                PlayerModel.HandCards.Add(new CardViewModel() { Card = card });
+            }
+            PlayerModel.HandCardCount = player.HandCards().Count;
+
+            // Equipment
+            foreach (var card in player.Equipments())
+            {
+                Equipment equip = card.Type as Equipment;
+
+                if (equip != null)
+                {
+                    EquipCommand command = new EquipCommand() { Card = card };
+                    switch (equip.Category)
+                    {
+                        case CardCategory.Weapon:
+                            PlayerModel.WeaponCommand = command;
+                            break;
+                        case CardCategory.Armor:
+                            PlayerModel.ArmorCommand = command;
+                            break;
+                        case CardCategory.DefensiveHorse:
+                            PlayerModel.DefensiveHorseCommand = command;
+                            break;
+                        case CardCategory.OffensiveHorse:
+                            PlayerModel.OffensiveHorseCommand = command;
+                            break;
+                    }
+                }
+            }
+
+            // Private Decks
+            var decks = Game.CurrentGame.Decks.GetPlayerPrivateDecks(player);
+            foreach (var deck in decks)
+            {
+                var deckModel = new PrivateDeckViewModel();
+                deckModel.Name = deck.Name;
+                PlayerModel.PrivateDecks.Add(deckModel);
+                var cards = Game.CurrentGame.Decks[player, deck];
+                foreach (var card in cards)
+                {
+                    deckModel.Cards.Add(new CardViewModel() { Card = card });
+                }
+            }
         }
 
         #region Fields
@@ -40,8 +98,8 @@ namespace Sanguosha.UI.Controls
         }
 
         private GameView parentGameView;
-        
-        public virtual GameView ParentGameView 
+
+        public virtual GameView ParentGameView
         {
             get
             {
@@ -49,7 +107,7 @@ namespace Sanguosha.UI.Controls
             }
             set
             {
-                parentGameView = value;                
+                parentGameView = value;
             }
         }
         #endregion
@@ -71,9 +129,9 @@ namespace Sanguosha.UI.Controls
 
         protected virtual void AddPrivateCards(IList<CardView> cards, bool isFaked)
         {
-            
+
         }
-        
+
         protected virtual IEnumerable<CardView> RemovePrivateCards(IList<Card> cards)
         {
             return null;
@@ -106,6 +164,14 @@ namespace Sanguosha.UI.Controls
             return null;
         }
 
+        public void PlayAnimationAsync(AnimationBase animation, int playCenter, Point offset)
+        {
+            Application.Current.Dispatcher.BeginInvoke((ThreadStart)delegate()
+            {
+                PlayAnimation(animation, playCenter, offset);
+            });
+        }
+
         public virtual void PlayAnimation(AnimationBase animation, int playCenter, Point offset)
         {
         }
@@ -113,7 +179,7 @@ namespace Sanguosha.UI.Controls
         public virtual void PlayIronShackleAnimation()
         {
         }
-        
+
         public virtual void Tremble()
         {
         }
@@ -145,27 +211,27 @@ namespace Sanguosha.UI.Controls
         {
             foreach (CardView card in cards)
             {
-                card.CardModel.IsEnabled = false;                
+                card.CardModel.IsEnabled = false;
             }
             if (deck == DeckType.Hand)
             {
-                AddHandCards(cards, isFaked);                
                 foreach (var card in cards)
                 {
                     PlayerModel.HandCards.Add(card.CardModel);
                 }
                 PlayerModel.HandCardCount += cards.Count;
+                AddHandCards(cards, isFaked);
             }
             else if (deck == DeckType.Equipment)
             {
                 foreach (var card in cards)
                 {
                     Equipment equip = card.Card.Type as Equipment;
-                    
+
                     if (equip != null)
                     {
-                        EquipCommand command = new EquipCommand(){ Card = card.Card };
-                        switch(equip.Category)
+                        EquipCommand command = new EquipCommand() { Card = card.Card };
+                        switch (equip.Category)
                         {
                             case CardCategory.Weapon:
                                 PlayerModel.WeaponCommand = command;
@@ -208,10 +274,18 @@ namespace Sanguosha.UI.Controls
                     PlayerModel.PrivateDecks.Add(deckModel);
                 }
                 foreach (var card in cards)
-                {                    
+                {
                     deckModel.Cards.Add(card.CardModel);
                 }
+
                 AddPrivateCards(cards, isFaked);
+            }
+            else
+            {
+                foreach (var card in cards)
+                {
+                    card.Disappear(isFaked ? 0d : 0.5d);
+                }
             }
         }
 
@@ -220,9 +294,22 @@ namespace Sanguosha.UI.Controls
             List<CardView> cardsToRemove = new List<CardView>();
             if (deck == DeckType.Hand)
             {
+
                 cardsToRemove.AddRange(RemoveHandCards(cards, isCopy));
+
                 if (!isCopy)
                 {
+                    foreach (var card in cards)
+                    {
+                        var backup = new List<CardViewModel>(PlayerModel.HandCards);
+                        foreach (var cardModel in backup)
+                        {
+                            if (cardModel.Card == card)
+                            {
+                                PlayerModel.HandCards.Remove(cardModel);
+                            }
+                        }
+                    }
                     PlayerModel.HandCardCount -= cardsToRemove.Count;
                 }
             }
@@ -250,24 +337,32 @@ namespace Sanguosha.UI.Controls
                                 break;
                         }
                     }
+
                     CardView cardView = RemoveEquipment(card, isCopy);
                     cardsToRemove.Add(cardView);
+
                 }
             }
             else if (deck == DeckType.DelayedTools)
             {
-                foreach (var card in cards)
+                if (!ViewModelBase.IsDetached)
                 {
-                    CardView cardView = RemoveDelayedTool(card, isCopy);
-                    cardsToRemove.Add(cardView);
+                    foreach (var card in cards)
+                    {
+                        CardView cardView = RemoveDelayedTool(card, isCopy);
+                        cardsToRemove.Add(cardView);
+                    }
                 }
             }
             else if (deck == RoleGame.RoleDeckType)
             {
-                foreach (var card in cards)
+                if (!ViewModelBase.IsDetached)
                 {
-                    CardView cardView = RemoveRoleCard(card);
-                    cardsToRemove.Add(cardView);
+                    foreach (var card in cards)
+                    {
+                        CardView cardView = RemoveRoleCard(card);
+                        cardsToRemove.Add(cardView);
+                    }
                 }
             }
             else if (deck is PrivateDeckType)
@@ -288,7 +383,12 @@ namespace Sanguosha.UI.Controls
                         PlayerModel.PrivateDecks.Remove(deckModel);
                     }
                 }
+
                 cardsToRemove.AddRange(RemovePrivateCards(cards));
+            }
+            else
+            {
+                cardsToRemove.AddRange(RemoveHandCards(cards, isCopy));
             }
 
             foreach (var card in cardsToRemove)
@@ -300,7 +400,7 @@ namespace Sanguosha.UI.Controls
         }
 
         public virtual void UpdateCardAreas()
-        {        
+        {
         }
         #endregion
 
@@ -318,5 +418,10 @@ namespace Sanguosha.UI.Controls
             return ClipToBounds ? base.GetLayoutClip(layoutSlotSize) : null;
         }
 
+
+        public virtual void UpdateImpersonateStatus(bool isPrimaryHero)
+        {
+
+        }
     }
 }

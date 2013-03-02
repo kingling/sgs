@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Sanguosha.Core.UI;
+using Sanguosha.Core.Heroes;
 
 namespace Sanguosha.Core.Skills
 {
@@ -20,22 +21,18 @@ namespace Sanguosha.Core.Skills
         public CheatSkill()
         {
             Helper = new UiHelper();
+            HeroTag = null;
         }
         public CheatType CheatType { get; set; }
         public int CardId { get; set; }
         public string SkillName { get; set; }
         [NonSerialized]
-        public Players.Player owner;
+        private Players.Player owner;
 
         public Players.Player Owner
         {
             get { return owner; }
             set { owner = value; }
-        }
-
-        public DeckType ExtraCardsDeck
-        {
-            get { return null; }
         }
 
         public bool IsRulerOnly
@@ -70,6 +67,15 @@ namespace Sanguosha.Core.Skills
 
         [NonSerialized]
         UiHelper helper;
+
+        [NonSerialized]
+        private Hero heroTag;
+
+        public Hero HeroTag
+        {
+            get { return heroTag; }
+            set { heroTag = value; }
+        }
 
         public UiHelper Helper
         {

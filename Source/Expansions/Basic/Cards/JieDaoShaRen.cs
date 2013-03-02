@@ -14,7 +14,7 @@ using Sanguosha.Core.Cards;
 
 namespace Sanguosha.Expansions.Basic.Cards
 {
-    
+
     public class JieDaoShaRen : CardHandler
     {
         protected override void Process(Player source, Player dest, ICard card, ReadOnlyCard readonlyCard, GameEventArgs inResponseTo)
@@ -22,7 +22,7 @@ namespace Sanguosha.Expansions.Basic.Cards
             throw new NotImplementedException();
         }
 
-        
+
         public class JieDaoShaRenVerifier : CardUsageVerifier
         {
             public override VerifierResult FastVerify(Player source, ISkill skill, List<Card> cards, List<Player> players)
@@ -38,7 +38,7 @@ namespace Sanguosha.Expansions.Basic.Cards
                 List<Player> newList = new List<Player>(players);
                 if (!newList.Contains(target))
                 {
-                    newList.Add(target);
+                    newList.Insert(0, target);
                 }
                 else
                 {
@@ -49,7 +49,7 @@ namespace Sanguosha.Expansions.Basic.Cards
 
             public override IList<CardHandler> AcceptableCardTypes
             {
-                get { return new List<CardHandler>() {new Sha()}; }
+                get { return new List<CardHandler>() { new Sha() }; }
             }
 
             Player target;
@@ -159,6 +159,10 @@ namespace Sanguosha.Expansions.Basic.Cards
             {
                 return VerifierResult.Fail;
             }
+            if (targets.Count == 1 && targets[0] == source)
+            {
+                return VerifierResult.Fail;
+            }
             bool hasWeapon = false;
             foreach (var c in Game.CurrentGame.Decks[targets[0], DeckType.Equipment])
             {
@@ -173,11 +177,12 @@ namespace Sanguosha.Expansions.Basic.Cards
             }
             if (targets.Count == 2)
             {
-                if (!Game.CurrentGame.PlayerCanBeTargeted(targets[0], new List<Player>() { targets[1] }, new CompositeCard() { Type = new Sha() }))
+                CompositeCard sha = new CompositeCard() { Type = new Sha() };
+                if (!Game.CurrentGame.PlayerCanBeTargeted(targets[0], new List<Player>() { targets[1] }, sha))
                 {
                     return VerifierResult.Fail;
                 }
-                if ((new Sha()).VerifyCore(targets[0], null,
+                if ((new Sha()).VerifyCore(targets[0], sha,
                      new List<Player>() { targets[1] }) != VerifierResult.Success)
                 {
                     return VerifierResult.Fail;

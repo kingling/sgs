@@ -51,9 +51,8 @@ namespace Sanguosha.Expansions.Hills.Skills
                 }
                 else
                 {
-                    var theCard = Game.CurrentGame.SelectACardFrom(arg.Targets[0], Owner, new CardChoicePrompt("TiaoXin"), "TiaoXin");
-
-                    Game.CurrentGame.HandleCardDiscard(arg.Targets[0], new List<Card>() { theCard });
+                    var theCard = Game.CurrentGame.SelectACardFrom(arg.Targets[0], Owner, new CardChoicePrompt("TiaoXin", Owner), "TiaoXin");
+                    if (theCard != null )Game.CurrentGame.HandleCardDiscard(arg.Targets[0], new List<Card>() { theCard });
                 }
                 break;
             }

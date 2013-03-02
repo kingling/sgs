@@ -28,7 +28,6 @@ namespace Sanguosha.Expansions.OverKnightFame11.Skills
                 MinPlayers = 0;
                 MaxPlayers = 0;
                 Discarding = false;
-                Helper.NoCardReveal = true;
             }
             protected override bool VerifyCard(Player source, Card card)
             {
@@ -46,6 +45,7 @@ namespace Sanguosha.Expansions.OverKnightFame11.Skills
                     break;
 
                 Game.CurrentGame.DrawCards(Owner, 1);
+                if (Owner.HandCards().Count == 0) continue;
 
                 ISkill skill;
                 List<Card> cards;
@@ -55,7 +55,7 @@ namespace Sanguosha.Expansions.OverKnightFame11.Skills
                     cards = new List<Card>();
                     cards.Add(Owner.HandCards().First());
                 }
-                Game.CurrentGame.HandleCardTransfer(Owner, Owner, QuanDeck, cards);
+                Game.CurrentGame.HandleCardTransfer(Owner, Owner, QuanDeck, cards, HeroTag);
             }
         }
 
@@ -84,9 +84,9 @@ namespace Sanguosha.Expansions.OverKnightFame11.Skills
             Triggers.Add(GameEvent.PlayerHandCardCapacityAdjustment, trigger);
             Triggers.Add(GameEvent.AfterDamageInflicted, trigger2);
             IsAutoInvoked = true;
-            ExtraCardsDeck = QuanDeck;
+            DeckCleanup.Add(QuanDeck);
         }
 
-        public static PrivateDeckType QuanDeck = new PrivateDeckType("Quan", false);
+        public static PrivateDeckType QuanDeck = new PrivateDeckType("Quan", true);
     }
 }

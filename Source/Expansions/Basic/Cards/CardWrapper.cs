@@ -21,6 +21,7 @@ namespace Sanguosha.Expansions.Basic.Cards
             card = new CompositeCard();
             card.Type = handler;
             card.Subcards = new List<Card>(cards);
+            card.Owner = Owner;
             return VerifierResult.Success;
         }
 
@@ -34,7 +35,7 @@ namespace Sanguosha.Expansions.Basic.Cards
             withoutNotify = !Notify;
         }
 
-        protected override void NotifyAction(Player source, List<Player> targets, CompositeCard card)
+        public override void NotifyAction(Player source, List<Player> targets, CompositeCard card)
         {
             if (withoutNotify) return;
             ActionLog log = new ActionLog();

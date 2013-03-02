@@ -124,7 +124,6 @@ namespace Sanguosha.Expansions.StarSP.Skills
                 {
                     Game.CurrentGame.LoseHealth(target, 1);
                     if (target.Equipments().Count == 0) return;
-                    GameDelays.Delay(GameDelayTypes.JunWei);
                     List<List<Card>> answer;
                     List<DeckPlace> sourceDecks = new List<DeckPlace>();
                     sourceDecks.Add(new DeckPlace(target, DeckType.Equipment));
@@ -198,7 +197,7 @@ namespace Sanguosha.Expansions.StarSP.Skills
                     cards.Reverse();
                     foreach (Card c in cards)
                     {
-                        (c.Type as Equipment).Install(a.Source, c);
+                        (c.Type as Equipment).Install(a.Source, c, null);
                     }
                 },
                 TriggerCondition.Global

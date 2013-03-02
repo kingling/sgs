@@ -35,14 +35,14 @@ namespace Sanguosha.UI.Controls
         public Room Room
         {
             get { return _room; }
-            set 
+            set
             {
                 if (_room == value) return;
                 _room = value;
                 if (value == null) return;
                 Id = value.Id;
                 State = value.State;
-                TimeOutSeconds = value.TimeOutSeconds;
+                Settings = value.Settings;
                 ClearSeats();
                 foreach (var seat in value.Seats)
                 {
@@ -51,25 +51,38 @@ namespace Sanguosha.UI.Controls
             }
         }
 
-        public string ModeString
-        {
-            get { return "RoleGame"; }
-        }
+        RoomSettings _settings;
 
-        private int _timeOutSeconds;
-
-        public int TimeOutSeconds
+        public RoomSettings Settings 
         {
-            get { return _timeOutSeconds; }
-            set 
+            get
             {
-                if (_timeOutSeconds == value) return;
-                _timeOutSeconds = value;
-                OnPropertyChanged("TimeOutSeconds");
+                return _settings;
+            }
+            set
+            {
+                _settings = value;
+                OnPropertyChanged("Settings");
             }
         }
 
-        public int OpenSeatCount
+        public string ModeString
+        {
+            get
+            {
+                if (Settings.IsDualHeroMode && Settings.NumberOfDefectors == 2) return "DualHeroDualDefectorRoleGame";
+                else if (Settings.IsDualHeroMode && Settings.NumberOfDefectors == 1) return "DualHeroSingleDefectorRoleGame";
+                else if (!Settings.IsDualHeroMode && Settings.NumberOfDefectors == 2) return "SingleHeroDualDefectorRoleGame";
+                else if (!Settings.IsDualHeroMode && Settings.NumberOfDefectors == 1) return "SingleHeroSingleDefectorRoleGame";
+                else
+                {
+                    Trace.Assert(false, "Unknown game mode");
+                    return "SingleHeroSingleDefectorRoleGame";
+                }
+            }
+        }
+
+        public int EmptySeatCount
         {
             get
             {
@@ -77,12 +90,28 @@ namespace Sanguosha.UI.Controls
             }
         }
 
+        public int OpenSeatCount
+        {
+            get
+            {
+                return Seats.Count(p => p.State != SeatState.Closed);
+            }
+        }
+
         public string OpenSeatString
         {
-            get 
+            get
             {
-                return string.Format("{0}/{1}", OpenSeatCount, Seats.Count); 
+                return string.Format("{0}/{1}", EmptySeatCount, OpenSeatCount);
             }
+        }
+
+        int optionalHeros;
+
+        public int OptionalHeros
+        {
+            set { optionalHeros = value; }
+            get { return optionalHeros; }
         }
 
         private RoomState _state;
@@ -90,7 +119,7 @@ namespace Sanguosha.UI.Controls
         public RoomState State
         {
             get { return _state; }
-            set 
+            set
             {
                 if (_state == value) return;
                 _state = value;

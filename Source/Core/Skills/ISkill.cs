@@ -5,13 +5,14 @@ using System.Text;
 using Sanguosha.Core.Players;
 using Sanguosha.Core.UI;
 using Sanguosha.Core.Cards;
+using Sanguosha.Core.Heroes;
 
 namespace Sanguosha.Core.Skills
 {
     public interface ISkill : ICloneable
     {
         Player Owner { get; set; }
-        DeckType ExtraCardsDeck { get; }
+        Hero HeroTag { get; set; }
         bool IsRulerOnly { get; }
         bool IsSingleUse { get; }
         bool IsAwakening { get; }

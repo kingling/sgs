@@ -21,7 +21,7 @@ namespace Sanguosha.Expansions.Hills.Skills
     public class GuZheng : TriggerSkill
     {
         List<Card> GuZhengCards;
-        static List<Card> belongToCurrent;
+        List<Card> belongToCurrent;
         class GuZhengVerifier : ICardChoiceVerifier
         {
             public VerifierResult Verify(List<List<Card>> answer)
@@ -47,6 +47,11 @@ namespace Sanguosha.Expansions.Hills.Skills
             {
                 get { return new UiHelper(); }
             }
+            List<Card> belongToCurrent;
+            public GuZhengVerifier(List<Card> belongTo)
+            {
+                belongToCurrent = belongTo;
+            }
         }
 
         void Run(Player Owner, GameEvent gameEvent, GameEventArgs eventArgs)
@@ -71,18 +76,22 @@ namespace Sanguosha.Expansions.Hills.Skills
                 return;
             }
             NotifySkillUse();
+            foreach (var c in GuZhengCards)
+            {
+                c.Log.SkillAction = this;
+            }
             CardsMovement move = new CardsMovement();
             move.Cards = GuZhengCards;
             move.To = new DeckPlace(null, GuZhengDeck);
-            Game.CurrentGame.MoveCards(move);
+            Game.CurrentGame.MoveCards(move, false, Core.Utils.GameDelayTypes.None);
             List<List<Card>> answer;
             var options = new AdditionalCardChoiceOptions() { Options = new List<OptionPrompt>() { new OptionPrompt("GuZhengHuoDe"), new OptionPrompt("GuZhengBuHuoDe") } };
             if (!Game.CurrentGame.UiProxies[Owner].AskForCardChoice(
-                new CardChoicePrompt("GuZheng", Owner, Game.CurrentGame.CurrentPlayer),
+                new CardChoicePrompt("GuZheng", Game.CurrentGame.CurrentPlayer),
                 new List<DeckPlace>() { new DeckPlace(null, GuZhengDeck) },
                 new List<string>() { "GuZhengFanHui" },
                 new List<int>() { 1 },
-                new GuZhengVerifier(),
+                new GuZhengVerifier(belongToCurrent),
                 out answer,
                 options))
             {
@@ -111,7 +120,6 @@ namespace Sanguosha.Expansions.Hills.Skills
                 Game.CurrentGame.PlayerAcquiredCard(Owner, cardsToAcquire);
             }
             GuZhengCards = new List<Card>();
-            Core.Utils.GameDelays.Delay(Core.Utils.GameDelayTypes.CardTransfer);
         }
 
         public GuZheng()

@@ -41,6 +41,7 @@ namespace Sanguosha.Core.Cards
             deckBackup = new Dictionary<DeckPlace, List<Card>>();
             foreach (Card c in cards)
             {
+                if (c.Place.DeckType == DeckType.None) continue;
                 Trace.Assert(c.Type != null);
                 if ((c.Type is Equipment) && c.Place.DeckType == DeckType.Equipment)
                 {
@@ -63,6 +64,7 @@ namespace Sanguosha.Core.Cards
         {
             foreach (Card c in cardsOnHold)
             {
+                if (c.Place.DeckType == DeckType.None) continue;
                 Trace.Assert(c.Type != null);
                 if ((c.Type is Equipment) && c.Place.DeckType == DeckType.Equipment)
                 {
@@ -86,7 +88,6 @@ namespace Sanguosha.Core.Cards
             log.Source = source;
             log.Targets = logTargets;
             log.SecondaryTargets = secondary;
-            log.SkillAction = card is Card ? (card as Card).Log.SkillAction : null;
             log.GameAction = action;
             log.CardAction = card;
             Game.CurrentGame.NotificationProxy.NotifySkillUse(log);
@@ -131,7 +132,7 @@ namespace Sanguosha.Core.Cards
             var readonlyCard = handlerArgs.ReadonlyCard;
             var inResponseTo = handlerArgs.InResponseTo;
             var card = handlerArgs.Card;
-            Game.CurrentGame.SortByOrderOfComputation(source, dests);
+            Game.CurrentGame.SortByOrderOfComputation(Game.CurrentGame.CurrentPlayer, dests);
             foreach (var player in dests)
             {
                 if (player.IsDead) continue;

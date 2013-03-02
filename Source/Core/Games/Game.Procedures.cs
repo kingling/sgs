@@ -13,6 +13,7 @@ using Sanguosha.Core.Exceptions;
 using Sanguosha.Core.UI;
 using Sanguosha.Core.Skills;
 using Sanguosha.Core.Utils;
+using Sanguosha.Core.Heroes;
 
 
 namespace Sanguosha.Core.Games
@@ -108,6 +109,7 @@ namespace Sanguosha.Core.Games
             damageArgs.Targets[0].Health -= damageArgs.Magnitude;
             Trace.TraceInformation("Player {0} Lose {1} hp, @ {2} hp", damageArgs.Targets[0].Id, damageArgs.Magnitude, damageArgs.Targets[0].Health);
             NotificationProxy.NotifyDamage(source, damageArgs.Targets[0], damageArgs.Magnitude, damageArgs.Element);
+            GameDelays.Delay(GameDelayTypes.Damage);
 
             try
             {
@@ -127,7 +129,6 @@ namespace Sanguosha.Core.Games
                 {
                     if (p.IsIronShackled)
                     {
-                        GameDelays.Delay(GameDelayTypes.TieSuoDamage);
                         readonlyCard[IsIronShackleDamage] = 1;
                         DoDamage(damageArgs.Source, p, originalTarget, ironShackledDamage, ironShackledDamageElement, card, readonlyCard);
                     }
@@ -143,10 +144,10 @@ namespace Sanguosha.Core.Games
             DoDamage(source, dest, dest, magnitude, elemental, card, readonlyCard);
         }
 
-        public void PlayerAcquireSkill(Player p, ISkill skill, bool undeletable = false)
+        public void PlayerAcquireAdditionalSkill(Player p, ISkill skill, Hero tag, bool undeletable = false)
         {
             if (p.IsDead) return;
-            p.AcquireAdditionalSkill(skill, undeletable);
+            p.AcquireAdditionalSkill(skill, tag, undeletable);
             SkillSetChangedEventArgs args = new SkillSetChangedEventArgs();
             args.Source = p;
             args.Skills.Add(skill);
@@ -155,7 +156,7 @@ namespace Sanguosha.Core.Games
             _ResetCards(p);
         }
 
-        public void PlayerLoseSkill(Player p, ISkill skill, bool undeletable = false)
+        public void PlayerLoseAdditionalSkill(Player p, ISkill skill, bool undeletable = false)
         {
             if (!undeletable && !p.AdditionalSkills.Contains(skill)) return;
             p.LoseAdditionalSkill(skill, undeletable);
@@ -198,7 +199,7 @@ namespace Sanguosha.Core.Games
             move.Cards = new List<Card>();
             move.Cards.Add(c);
             move.To = new DeckPlace(player, DeckType.JudgeResult);
-            MoveCards(move);
+            MoveCards(move, false, GameDelayTypes.None);
             GameEventArgs args = new GameEventArgs();
             args.Source = player;
             if (triggers.ContainsKey(GameEvent.PlayerJudgeBegin) && triggers[GameEvent.PlayerJudgeBegin].Count > 0)
@@ -234,12 +235,12 @@ namespace Sanguosha.Core.Games
                 c = decks[player, DeckType.JudgeResult].Last();
                 move = new CardsMovement();
                 move.Cards = new List<Card>();
-                List<Card> backup = new List<Card>(move.Cards);
                 move.Cards.Add(c);
+                List<Card> backup = new List<Card>(move.Cards);
                 move.To = new DeckPlace(null, DeckType.Discard);
                 move.Helper = new MovementHelper();
                 PlayerAboutToDiscardCard(player, move.Cards, DiscardReason.Judge);
-                MoveCards(move);
+                MoveCards(move, false, GameDelayTypes.None);
                 PlayerDiscardedCard(player, backup, DiscardReason.Judge);
             }
             GameDelays.Delay(GameDelayTypes.JudgeEnd);
@@ -292,6 +293,7 @@ namespace Sanguosha.Core.Games
             args.Targets[0].Health += args.Delta;
             Trace.TraceInformation("Player {0} lose {1} hp, @ {2} hp", args.Targets[0].Id, -args.Delta, args.Targets[0].Health);
             NotificationProxy.NotifyLoseHealth(args.Targets[0], -args.Delta);
+            GameDelays.Delay(GameDelayTypes.Damage);
 
             try
             {
@@ -384,8 +386,8 @@ namespace Sanguosha.Core.Games
             if (isDoingAFavor != p)
             {
                 PlayerAboutToDiscardCard(isDoingAFavor, m.Cards, DiscardReason.Play);
-                MoveCards(m);
-                PlayerLostCard(p, backup);
+                MoveCards(m, false, GameDelayTypes.PlayerAction);
+                PlayerLostCard(p, m.Cards);
                 PlayerPlayedCard(isDoingAFavor, targets, result);
                 PlayerPlayedCard(p, targets, result);
                 PlayerDiscardedCard(isDoingAFavor, backup, DiscardReason.Play);
@@ -393,11 +395,12 @@ namespace Sanguosha.Core.Games
             else
             {
                 PlayerAboutToDiscardCard(p, m.Cards, DiscardReason.Play);
-                MoveCards(m);
-                PlayerLostCard(p, backup);
+                MoveCards(m, false, GameDelayTypes.PlayerAction);
+                PlayerLostCard(p, m.Cards);
                 PlayerPlayedCard(p, targets, result);
                 PlayerDiscardedCard(p, backup, DiscardReason.Play);
             }
+            Game.CurrentGame.LastAction = skill;
             return true;
         }
 
@@ -436,16 +439,8 @@ namespace Sanguosha.Core.Games
             }
         }
 
-        public void PlayerLostCard(Player p, List<Card> cards, bool atomicAfterMove = false)
+        public void PlayerLostCard(Player p, List<Card> cards)
         {
-            if (atomic && !atomicAfterMove)
-            {
-                if (!cards.Any(cc => cc.Place.DeckType == DeckType.Hand || cc.Place.DeckType == DeckType.Equipment)) return;
-            }
-            else
-            {
-                if (!cards.Any(cc => cc.HistoryPlace1.DeckType == DeckType.Hand || cc.HistoryPlace1.DeckType == DeckType.Equipment)) return;
-            }
             try
             {
                 GameEventArgs arg = new GameEventArgs();
@@ -460,9 +455,8 @@ namespace Sanguosha.Core.Games
             }
         }
 
-        public void PlayerAcquiredCard(Player p, List<Card> cards, bool atomicAfterMove = false)
+        public void PlayerAcquiredCard(Player p, List<Card> cards)
         {
-            if ((!atomic || atomicAfterMove) && !cards.Any(cc => cc.Place.DeckType == DeckType.Hand || cc.Place.DeckType == DeckType.Equipment)) return;
             try
             {
                 GameEventArgs arg = new GameEventArgs();
@@ -479,6 +473,7 @@ namespace Sanguosha.Core.Games
 
         public void HandleCardDiscard(Player p, List<Card> cards, DiscardReason reason = DiscardReason.Discard)
         {
+            cards = new List<Card>(cards);
             CardsMovement move = new CardsMovement();
             move.Cards = new List<Card>(cards);
             foreach (Card c in cards)
@@ -494,18 +489,17 @@ namespace Sanguosha.Core.Games
             List<Card> backup = new List<Card>(move.Cards);
             move.To = new DeckPlace(null, DeckType.Discard);
             PlayerAboutToDiscardCard(p, move.Cards, reason);
-            MoveCards(move);
-            if (!atomic)
-                GameDelays.Delay(GameDelayTypes.Discard);
+            MoveCards(move, false, GameDelayTypes.Discard);
             if (p != null)
             {
-                PlayerLostCard(p, backup);
+                PlayerLostCard(p, move.Cards);
                 PlayerDiscardedCard(p, backup, reason);
             }
         }
 
         public void HandleCardTransferToHand(Player from, Player to, List<Card> cards, MovementHelper helper = null)
         {
+            cards = new List<Card>(cards);
             if (to.IsDead)
             {
                 if (cards.Any(cd => cd.Place.DeckType != DeckType.Hand && cd.Place.DeckType != DeckType.Equipment && cd.Place.DeckType != DeckType.DelayedTools))
@@ -526,15 +520,15 @@ namespace Sanguosha.Core.Games
                 move.Helper = helper;
             }
             MoveCards(move);
-            if (!atomic) GameDelays.Delay(GameDelayTypes.CardTransfer);
             EnterAtomicContext();
-            PlayerLostCard(from, cards, true);
-            PlayerAcquiredCard(to, cards, true);
+            PlayerLostCard(from, cards);
+            PlayerAcquiredCard(to, cards);
             ExitAtomicContext();
         }
 
-        public void HandleCardTransfer(Player from, Player to, DeckType target, List<Card> cards)
+        public void HandleCardTransfer(Player from, Player to, DeckType target, List<Card> cards, Hero tag = null)
         {
+            cards = new List<Card>(cards);
             if (to.IsDead)
             {
                 if (cards.Any(cd => cd.Place.DeckType != DeckType.Hand && cd.Place.DeckType != DeckType.Equipment && cd.Place.DeckType != DeckType.DelayedTools))
@@ -551,11 +545,12 @@ namespace Sanguosha.Core.Games
             move.Cards = new List<Card>(cards);
             move.To = new DeckPlace(to, target);
             move.Helper = new MovementHelper();
+            move.Helper.PrivateDeckHeroTag = tag;
             MoveCards(move);
-            GameDelays.Delay(GameDelayTypes.CardTransfer);
+            bool triggerAcquiredCard = target == DeckType.Hand || target == DeckType.Equipment;
             EnterAtomicContext();
-            PlayerLostCard(from, cards, true);
-            PlayerAcquiredCard(to, cards, true);
+            PlayerLostCard(from, cards);
+            if (triggerAcquiredCard) PlayerAcquiredCard(to, cards);
             ExitAtomicContext();
         }
 
@@ -658,7 +653,7 @@ namespace Sanguosha.Core.Games
             {
                 move.Helper = helper;
             }
-            MoveCards(move, true);
+            MoveCards(move, true, GameDelayTypes.None);
             if (target != null)
             {
                 PlayerLostCard(target, list);
@@ -675,7 +670,7 @@ namespace Sanguosha.Core.Games
             {
                 move.Helper = helper;
             }
-            MoveCards(move);
+            MoveCards(move, false, GameDelayTypes.None);
             if (target != null)
             {
                 PlayerLostCard(target, list);
@@ -689,7 +684,6 @@ namespace Sanguosha.Core.Games
             move.To = new DeckPlace(null, DeckType.Discard);
             move.Helper = new MovementHelper();
             MoveCards(move);
-            GameDelays.Delay(GameDelayTypes.CardTransfer);
             if (target != null)
             {
                 PlayerLostCard(target, list);
@@ -826,6 +820,7 @@ namespace Sanguosha.Core.Games
             Dictionary<Player, int> answers;
             GlobalProxy.AskForMultipleChoice(new MultipleChoicePrompt("ShowCards", p), new List<OptionPrompt>() { OptionPrompt.YesChoice }, AlivePlayers, out answers);
             NotificationProxy.NotifyShowCardsEnd();
+            foreach (Card c in cards) Game.CurrentGame.HideHandCard(c);
         }
 
         public List<Card> PickDefaultCardsFrom(List<DeckPlace> places, int n = 1)
@@ -850,5 +845,21 @@ namespace Sanguosha.Core.Games
             return result;
         }
 
+        public void RegisterSkillCleanup(ISkill skill, DeckType deck)
+        {
+            cleanupSquad.CalldownCleanupCrew(skill, deck);
+        }
+
+        public void RegisterMarkCleanup(ISkill skill, PlayerAttribute attr)
+        {
+            cleanupSquad.CalldownCleanupCrew(skill, attr);
+        }
+
+        public bool IsMainHero(Hero h, Player p)
+        {
+            return h == p.Hero;
+        }
+
+        public ISkill LastAction { get; set; }
     }
 }

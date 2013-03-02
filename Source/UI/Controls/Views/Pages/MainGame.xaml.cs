@@ -25,9 +25,13 @@ using System.Collections.ObjectModel;
 using Sanguosha.Core.Cards;
 using Sanguosha.Lobby.Core;
 using Sanguosha.Core.Utils;
+using System.ComponentModel;
 
 namespace Sanguosha.UI.Controls
 {
+
+    public delegate void NavigationEventHandler(object sender, NavigationService service);
+
     /// <summary>
     /// Interaction logic for MainGame.xaml
     /// </summary>
@@ -38,14 +42,38 @@ namespace Sanguosha.UI.Controls
             this.InitializeComponent();
             ctrlGetCard.OnCardSelected += new CardSelectedHandler(ctrlGetCard_OnCardSelected);
             ctrlGetSkill.OnSkillNameSelected += new SkillNameSelectedHandler(ctrlGetSkill_OnSkillNameSelected);
-            gameView.OnGameCompleted += new EventHandler(gameView_OnGameCompleted);
+            gameEndEventHandler = gameView_OnGameCompleted;
+            gameView.OnGameCompleted += gameEndEventHandler;
+            gameView.OnUiAttached += gameView_OnUiAttached;
             // Insert code required on object creation below this point.
         }
 
+        void gameView_OnUiAttached(object sender, EventArgs e)
+        {
+            gameView.OnUiAttached -= gameView_OnUiAttached;
+            if (BackwardNavigationService != null)
+            {
+                BackwardNavigationService.Navigate(this);
+                BackwardNavigationService = null;
+            }
+        }
+
+        public static NavigationService BackwardNavigationService
+        {
+            get;
+            set;
+        }
+
+        EventHandler gameEndEventHandler;
+
         void gameView_OnGameCompleted(object sender, EventArgs e)
         {
-            this.NavigationService.Navigate(LobbyView.Instance);
-            LobbyView.Instance.Reload();
+            gameView.OnGameCompleted -= gameEndEventHandler;
+            var handle = OnNavigateBack;
+            if (handle != null)
+            {
+                handle(this, NavigationService);
+            }
         }
 
         void ctrlGetSkill_OnSkillNameSelected(string skillName)
@@ -85,7 +113,7 @@ namespace Sanguosha.UI.Controls
             Trace.WriteLine("Log starting");
 #endif
             _game = new RoleGame();
-            _game.RegisterCurrentThread();
+            Game.CurrentGameOverride = _game;
             _game.Settings = NetworkClient.Receive() as GameSettings;
             Trace.Assert(_game.Settings != null);
             NetworkClient.SelfId = (int)NetworkClient.Receive();
@@ -112,7 +140,7 @@ namespace Sanguosha.UI.Controls
             GameViewModel gameModel = new GameViewModel();
             gameModel.Game = _game;
             gameModel.MainPlayerSeatNumber = NetworkClient.SelfId >= _game.Players.Count ? 0 : NetworkClient.SelfId;
-            gameView.DataContext = gameModel;
+            
             _game.NotificationProxy = gameView;
             List<ClientNetworkUiProxy> inactive = new List<ClientNetworkUiProxy>();
             for (int i = 0; i < _game.Players.Count; i++)
@@ -140,17 +168,30 @@ namespace Sanguosha.UI.Controls
             _game.GlobalProxy = new GlobalClientUiProxy(_game, activeClientProxy, inactive);
             _game.IsUiDetached = _game.IsUiDetached;
 #endif
+            Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
+            {                
+                gameView.DataContext = gameModel;
+                if (BackwardNavigationService != null && !ViewModelBase.IsDetached)
+                {
+                    BackwardNavigationService.Navigate(this);
+                    BackwardNavigationService = null;
+                }
+            });
+            _game.Run();            
         }
 
         private Game _game;
         
         Thread gameThread;
 
+        public void Start()
+        {
+            gameThread = new Thread(InitGame) { IsBackground = true };
+            gameThread.Start();            
+        }
+
         private void Page_Loaded(object sender, RoutedEventArgs e)
         {
-            InitGame();
-            gameThread = new Thread(_game.Run) { IsBackground = true };
-            gameThread.Start();
         }
 
         private void btnGetCard_Click(object sender, RoutedEventArgs e)
@@ -209,6 +250,21 @@ namespace Sanguosha.UI.Controls
             soundButton.Visibility = Visibility.Collapsed;
             muteButton.Visibility = Visibility.Visible;
             GameSoundPlayer.IsMute = true;
+        }
+
+        public event NavigationEventHandler OnNavigateBack;
+
+        private void btnGoBack_Click(object sender, RoutedEventArgs e)
+        {
+            if (_game != null)
+            {
+                _game.Abort();
+            }
+            var handle = OnNavigateBack;
+            if (handle != null)
+            {
+                handle(this, NavigationService);
+            }
         }
 
     }

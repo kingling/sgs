@@ -32,6 +32,22 @@ namespace Sanguosha.UI.Controls
             this.DataContextChanged += new DependencyPropertyChangedEventHandler(PlayerInfoView_DataContextChanged);
             _OnPropertyChanged = new PropertyChangedEventHandler(model_PropertyChanged);
             handCardArea.OnHandCardMoved += handCardArea_OnHandCardMoved;
+            this.Unloaded += MainPlayerView_Unloaded;
+        }
+
+        private Canvas animationCenter2;
+
+        internal void SetAnimationCenter(Canvas canvas)
+        {
+            animationCenter2 = canvas;
+        }
+
+        void MainPlayerView_Unloaded(object sender, RoutedEventArgs e)
+        {
+            playerInfoArea.Effect = null;
+            heroPhoto.Effect = null;
+            heroPhoto2.Effect = null;
+            this.DataContext = null;
         }
 
         void handCardArea_OnHandCardMoved(int oldPlace, int newPlace)
@@ -109,25 +125,32 @@ namespace Sanguosha.UI.Controls
                 Uri uri = GameSoundLocator.GetSystemSound("IronShackled");
                 GameSoundPlayer.PlaySoundEffect(uri);
             }
-            else if (e.PropertyName == "ImpersonatedHeroName")
+        }
+
+        public override void UpdateImpersonateStatus(bool isPrimaryHero)
+        {
+            Sanguosha.UI.Resources.FileNameToImageSourceConverter converter = new UI.Resources.FileNameToImageSourceConverter();
+
+            var hero = isPrimaryHero ? PlayerModel.Hero1Model : PlayerModel.Hero2Model;
+
+            Trace.Assert(hero != null);
+
+            Storyboard sb = (Resources[isPrimaryHero ? "sbStartImpersonate" : "sbStartImpersonate2"] as Storyboard);
+            if (!string.IsNullOrEmpty(hero.ImpersonatedHeroName))
             {
-                Sanguosha.UI.Resources.FileNameToImageSourceConverter converter = new UI.Resources.FileNameToImageSourceConverter();
-                
                 converter.StringFormat = "Resources/Images/Heroes/Full/{0}.png";
                 converter.ResourceKeyFormat = "Hero.{0}.Image";
-                converter.CropRect = new Int32Rect(71,28,145,145);
-                ImageSource source = converter.Convert(new object[]{ this, model.ImpersonatedHeroName }, typeof(ImageSource), null, null) as ImageSource;
-                impersonateEffect.Texture2 = new ImageBrush(source);
-
-                Storyboard sb = (Resources["sbStartImpersonate"] as Storyboard);
-                if (!string.IsNullOrEmpty(model.ImpersonatedHeroName))
-                {
-                    sb.Begin();
-                }
+                converter.CropRect = new Int32Rect(71, 28, 145, 145);
+                ImageSource source = converter.Convert(new object[] { this, hero.ImpersonatedHeroName }, typeof(ImageSource), null, null) as ImageSource;
+                if (isPrimaryHero)
+                    impersonateEffect.Texture2 = new ImageBrush(source);
                 else
-                {
-                    sb.Stop();
-                }
+                    impersonateEffect1.Texture2 = new ImageBrush(source);
+                sb.Begin();
+            }
+            else
+            {
+                sb.Stop();
             }
         }
 
@@ -136,19 +159,19 @@ namespace Sanguosha.UI.Controls
             tieSuoAnimation.Start();
         }
 
-        private void Border_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        private void HeroPhoto_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             PlayerViewModel model = DataContext as PlayerViewModel;
             model.SelectOnce();
         }
 
-        private void Border_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
+        private void HeroPhoto_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
         {
             PlayerViewModel model = DataContext as PlayerViewModel;
             model.IsSelected = false;
         }
 
-        protected override void UpdateCards()
+        internal override void UpdateCards()
         {
             var oldHandCards = handCardArea.Cards;
             foreach (var card in oldHandCards)
@@ -162,25 +185,34 @@ namespace Sanguosha.UI.Controls
             horse1Area.Children.Clear();
             horse2Area.Children.Clear();
             delayedToolsDock.Children.Clear();
+            equipmentArea.Visibility = System.Windows.Visibility.Collapsed;
+
+            base.UpdateCards();        
 
             if (PlayerModel == null) return;
             var player = PlayerModel.Player;
             if (player == null) return;
-                        
-            foreach (var equip in player.Equipments())
+
+            EquipCommand[] commands = { PlayerModel.WeaponCommand, PlayerModel.ArmorCommand,
+                                        PlayerModel.DefensiveHorseCommand, PlayerModel.OffensiveHorseCommand };
+            foreach (var equip in commands)
             {
-                AddEquipment(CardView.CreateCard(equip, ParentGameView.GlobalCanvas), true);
+                if (equip != null)
+                {
+                    AddEquipment(CardView.CreateCard(equip, ParentGameView.GlobalCanvas), true);
+                }
             }
             foreach (var dt in player.DelayedTools())
             {
                 AddDelayedTool(CardView.CreateCard(dt, ParentGameView.GlobalCanvas), true);
             }
             // Add hand cards last because adding equipment may result in layout change of hand card area.
-            AddHandCards(CardView.CreateCards(player.HandCards(), ParentGameView.GlobalCanvas), true);
+            AddHandCards(CardView.CreateCards(PlayerModel.HandCards, ParentGameView.GlobalCanvas), true);
         }
 
         protected override void AddHandCards(IList<CardView> cards, bool isFaked)
         {
+//            isFaked = true;
             foreach (var card in cards)
             {
                 card.DragDirection = DragDirection.Horizontal;
@@ -251,8 +283,7 @@ namespace Sanguosha.UI.Controls
                         {
                             cardsToRemove.Add(cardView);
                             cardView.CardModel.IsSelected = false;
-                            cardView.DragDirection = DragDirection.None;
-                            PlayerModel.HandCards.Remove(viewModel);                            
+                            cardView.DragDirection = DragDirection.None;                            
                         }
                         found = true;
                         break;
@@ -329,6 +360,7 @@ namespace Sanguosha.UI.Controls
             if (IsEquipmentDockEmpty)
             {
                 equipmentArea.Visibility = Visibility.Visible;
+                this.UpdateLayout();
                 handCardArea.RearrangeCards();
             }
 
@@ -546,7 +578,7 @@ namespace Sanguosha.UI.Controls
             Canvas canvas;
             if (playCenter == 1) canvas = animationCenter1;
             else canvas = animationCenter2;
-
+            if (canvas == null) return;
             animation.SetValue(Canvas.LeftProperty, -animation.Width / 2 + offset.X);
             animation.SetValue(Canvas.TopProperty, -animation.Height / 2 + offset.Y);
             canvas.Children.Add(animation);

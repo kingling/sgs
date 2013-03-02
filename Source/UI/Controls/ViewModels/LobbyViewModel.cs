@@ -19,7 +19,6 @@ namespace Sanguosha.UI.Controls
         {
             _chatCache = new List<KeyValuePair<string, string>>();
             Rooms = new ObservableCollection<RoomViewModel>();
-            CreateRoomCommand = new SimpleRelayCommand(o => CreateRoom()) { CanExecuteStatus = true };
             UpdateRoomCommand = new SimpleRelayCommand(o => UpdateRooms()) { CanExecuteStatus = true };
             EnterRoomCommand = new SimpleRelayCommand(o => EnterRoom()) { CanExecuteStatus = true };
             StartGameCommand = new SimpleRelayCommand(o => StartGame()) { CanExecuteStatus = false };
@@ -105,7 +104,7 @@ namespace Sanguosha.UI.Controls
                                                                                  s.State != SeatState.Host &&
                                                                                  s.State != SeatState.GuestReady))
                                                         && _currentRoom.Seats.Count(s => s.Account != null) >= 2;
-                    CurrentSeat = CurrentRoom.Seats.FirstOrDefault(s => s.Account != null && s.Account.Id == CurrentAccount.Id);
+                    CurrentSeat = CurrentRoom.Seats.FirstOrDefault(s => s.Account != null && s.Account.UserName == CurrentAccount.UserName);
                 }
                 else
                 {
@@ -183,7 +182,8 @@ namespace Sanguosha.UI.Controls
 
         #region Commands
         public ICommand UpdateRoomCommand { get; set; }
-        public ICommand CreateRoomCommand { get; set; }
+        public ICommand CreateSingleHeroRoomCommand { get; set; }
+        public ICommand CreateDualHeroRoomCommand { get; set; }
         public ICommand EnterRoomCommand { get; set; }
         public SimpleRelayCommand StartGameCommand { get; set; }
         public SimpleRelayCommand SpectateCommand { get; set; }
@@ -247,9 +247,9 @@ namespace Sanguosha.UI.Controls
         /// <summary>
         /// Creates and enters a new room.
         /// </summary>
-        public void CreateRoom()
+        public void CreateRoom(RoomSettings settings)
         {
-            var room = _connection.CreateRoom(_loginToken);
+            var room = _connection.CreateRoom(_loginToken, settings);
             if (room != null)
             {
                 CurrentRoom = new RoomViewModel() { Room = room };
@@ -343,7 +343,7 @@ namespace Sanguosha.UI.Controls
                 {
                     Rooms.Add(new RoomViewModel() { Room = room });
                 }
-                if (CurrentRoom.Id == id)
+                if (CurrentRoom != null && CurrentRoom.Id == id)
                 {
                     CurrentRoom = new RoomViewModel() { Room = room };                    
                 }
@@ -404,6 +404,12 @@ namespace Sanguosha.UI.Controls
         public bool Ping()
         {
             return true;
+        }
+
+        public void Logout()
+        {
+            Connection.Logout(LoginToken);
+            LoginToken = new LoginToken();
         }
     }
 

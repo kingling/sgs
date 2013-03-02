@@ -27,6 +27,12 @@ namespace Sanguosha.Expansions.SP.Skills
             MaxPlayers = 1;
         }
 
+        protected override int GenerateSpecialEffectHintIndex(Player source, List<Player> targets, List<Card> cards)
+        {
+            if (targets[0].HandCards().Count > Math.Max(targets[0].Health, 0)) return 1;
+            return 0;
+        }
+
         protected override bool VerifyCard(Player source, Card card)
         {
             return false;
@@ -46,6 +52,7 @@ namespace Sanguosha.Expansions.SP.Skills
         {
             Player target = arg.Targets[0];
             Owner[SongCiTarget[target]] = 1;
+            target[SongCiStatus] = 1;
             if (target.HandCards().Count < target.Health)
             {
                 Game.CurrentGame.DrawCards(target, 2);
@@ -59,5 +66,6 @@ namespace Sanguosha.Expansions.SP.Skills
         }
 
         private static PlayerAttribute SongCiTarget = PlayerAttribute.Register("SongCiTarget");
+        private static PlayerAttribute SongCiStatus = PlayerAttribute.Register("SongCi", false, false, true);
     }
 }
