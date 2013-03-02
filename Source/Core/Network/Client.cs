@@ -78,6 +78,7 @@ namespace Sanguosha.Core.Network
             sender = new ItemSender(Stream.Null);
             commId = 0;
             ReplayController = new Utils.ReplayController();
+            ReplayController.EvenDelays = true;
         }
 
         private Stream replayStream;
@@ -130,12 +131,12 @@ namespace Sanguosha.Core.Network
                 CommandItem item = (CommandItem)o;
                 if (item.command == Command.Attach)
                 {
-                    Game.CurrentGame.IsUiDetached++;
+                    Game.CurrentGame.IsUiDetached--;
                     return Receive();
                 }
                 if (item.command == Command.Detach)
                 {
-                    Game.CurrentGame.IsUiDetached--;
+                    Game.CurrentGame.IsUiDetached++;
                     return Receive();
                 }
                 if (item.command == Command.Interrupt)

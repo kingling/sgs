@@ -13,6 +13,7 @@ using Sanguosha.Core.Games;
 using Sanguosha.Core.Players;
 using Sanguosha.Core.Exceptions;
 using Sanguosha.Core.Utils;
+using Sanguosha.Core.Heroes;
 
 namespace Sanguosha.Expansions.Hills.Skills
 {
@@ -24,6 +25,7 @@ namespace Sanguosha.Expansions.Hills.Skills
         public static PrivateDeckType TianDeck = new PrivateDeckType("Tian", true);
         public class TunTianGetJudgeCardTrigger : GetJudgeCardTrigger
         {
+            Hero tag;
             protected override void GetJudgeCards(List<Card> list)
             {
                 if (list[0].Suit == SuitType.Heart) return;
@@ -32,15 +34,20 @@ namespace Sanguosha.Expansions.Hills.Skills
                 CardsMovement move = new CardsMovement();
                 move.Cards = new List<Card>(list);
                 move.To = new DeckPlace(Owner, TianDeck);
+                move.Helper.PrivateDeckHeroTag = tag;
                 Game.CurrentGame.MoveCards(move);
             }
-            public TunTianGetJudgeCardTrigger(Player p, ISkill s, ICard c) : base(p, s, c) { }
+            public TunTianGetJudgeCardTrigger(Player p, ISkill s, ICard c, Hero tag) : base(p, s, c) { this.tag = tag; }
         }
 
         void Run(Player Owner, GameEvent gameEvent, GameEventArgs eventArgs)
         {
-            Game.CurrentGame.RegisterTrigger(GameEvent.PlayerJudgeDone, new TunTianGetJudgeCardTrigger(Owner, this, null) { Priority = int.MinValue });
-            Game.CurrentGame.Judge(Owner, this, null, (judgeResultCard) => { return judgeResultCard.Suit != SuitType.Heart; });
+            if (eventArgs.Cards.Any(cd => cd.HistoryPlace1.DeckType == DeckType.Hand || cd.HistoryPlace1.DeckType == DeckType.Equipment))
+            {
+                NotifySkillUse();
+                Game.CurrentGame.RegisterTrigger(GameEvent.PlayerJudgeDone, new TunTianGetJudgeCardTrigger(Owner, this, null, HeroTag) { Priority = int.MinValue });
+                Game.CurrentGame.Judge(Owner, this, null, (judgeResultCard) => { return judgeResultCard.Suit != SuitType.Heart; });
+            }
         }
 
         public TunTian()
@@ -50,7 +57,7 @@ namespace Sanguosha.Expansions.Hills.Skills
                 (p, e, a) => { return Game.CurrentGame.PhasesOwner != p; },
                 Run,
                 TriggerCondition.OwnerIsSource
-            );
+            ) { IsAutoNotify = false };
             Triggers.Add(GameEvent.CardsLost, trigger);
             var trigger2 = new AutoNotifyPassiveSkillTrigger(
                 this,
@@ -59,7 +66,7 @@ namespace Sanguosha.Expansions.Hills.Skills
             ) { IsAutoNotify = false, AskForConfirmation = false };
             Triggers.Add(GameEvent.PlayerDistanceAdjustment, trigger2);
             IsAutoInvoked = true;
-            ExtraCardsDeck = TianDeck;
+            DeckCleanup.Add(TianDeck);
         }
     }
 }

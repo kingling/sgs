@@ -130,6 +130,8 @@ namespace Sanguosha.Core.Games
             isDying = new Stack<Player>();
             handCardVisibility = new Dictionary<Player, List<Player>>();
             Settings = new GameSettings();
+            cleanupSquad = new CleanupSquad();
+            cleanupSquad.Priority = -1;
         }
 
         public void LoadExpansion(Expansion expansion)
@@ -141,6 +143,8 @@ namespace Sanguosha.Core.Games
                 triggersToRegister.AddRange(expansion.TriggerRegistration);
             }
         }
+
+        protected CleanupSquad cleanupSquad;
 
         public Network.Server GameServer { get; set; }
         public Network.Client GameClient { get; set; }
@@ -211,7 +215,7 @@ namespace Sanguosha.Core.Games
                 Card card = cards[i];
                 if (card.Place.DeckType == DeckType.Equipment || card.Place.DeckType == DeckType.DelayedTools)
                 {
-                    return;
+                    continue;
                 }
                 if (GameClient != null)
                 {
@@ -344,14 +348,26 @@ namespace Sanguosha.Core.Games
             }
         }
 
+        public void Abort()
+        {
+            if (mainThread == null) return;
+            Trace.Assert(mainThread != Thread.CurrentThread);            
+            if (GlobalProxy != null) GlobalProxy.Abort();
+            mainThread.Abort();
+            mainThread = null;
+        }
+
+        Thread mainThread;
+
         public virtual void Run()
         {
-            if (games.ContainsKey(Thread.CurrentThread))
+            mainThread = Thread.CurrentThread;
+            if (!games.ContainsKey(Thread.CurrentThread))
             {
-                throw new GameAlreadyStartedException();
+                /*throw new GameAlreadyStartedException();
             }
             else
-            {
+            {*/
                 games.Add(Thread.CurrentThread, this);
             }
             if (GameServer != null)
@@ -435,13 +451,35 @@ namespace Sanguosha.Core.Games
             catch (GameOverException)
             {
 
+                var keys = new List<Thread>(from t in games.Keys where games[t] == this select t);
+                foreach (var t in keys)
+                {
+                    games.Remove(t);
+                }
+
+                this.NotificationProxy = null;
+                this.uiProxies = null;
             }
-#if !DEBUG
+            mainThread = null;
+/*
             catch (Exception e)
             {
+                var keys = new List<Thread>(from t in games.Keys where games[t] == this select t);
+                foreach (var t in keys)
+                {
+                    games.Remove(t);
+                }
+                this.NotificationProxy = null;
+#if TRACE
+                while (e.InnerException != null)
+                {
+                    e = e.InnerException;
+                }
                 Trace.TraceError(e.StackTrace);
-            }
+                Trace.Assert(false, e.StackTrace);
 #endif
+            }
+*/
             if (GameServer != null)
             {
                 GameServer.Stop();
@@ -458,12 +496,20 @@ namespace Sanguosha.Core.Games
         /// </summary>
         protected abstract void InitTriggers();
 
+        /// <summary>
+        /// Speed up current game access for client process
+        /// </summary>
+        public static Game CurrentGameOverride
+        {
+            get;
+            set;
+        }
+
         public static Game CurrentGame
         {
-            get { return games[Thread.CurrentThread]; }
-            set
+            get 
             {
-                games[Thread.CurrentThread] = value;
+                return CurrentGameOverride ?? games[Thread.CurrentThread]; 
             }
         }
 
@@ -480,7 +526,6 @@ namespace Sanguosha.Core.Games
             }
             games.Add(Thread.CurrentThread, this);
         }
-
 
         List<Card> originalCardSet;
 
@@ -651,7 +696,7 @@ namespace Sanguosha.Core.Games
             {
                 isUiDetached = value;
                 if (notificationProxy == null) return;
-                if ((lastUiState == 0) ^ (isUiDetached == 0)) return;
+                if (!((lastUiState == 0) ^ (isUiDetached == 0))) return;
                 lastUiState = isUiDetached;
                 if (isUiDetached == 0)
                 {
@@ -674,13 +719,11 @@ namespace Sanguosha.Core.Games
             }
         }
 
-        private static INotificationProxy dummyProxy = new DummyNotificationProxy();
-
         private INotificationProxy notificationProxy;
 
         public INotificationProxy NotificationProxy
         {
-            get { if (IsUiDetached != 0) return dummyProxy; return notificationProxy; }
+            get { return notificationProxy; }
             set { notificationProxy = value; }
         }
 
@@ -772,10 +815,11 @@ namespace Sanguosha.Core.Games
             }
             var moves = atomicMoves;
             var triggers = atomicTriggers;
+            var btriggers = atomicTriggersBeforeMove;
             atomic = false;
-            EmitTriggers(atomicTriggersBeforeMove);
-            MoveCards(atomicMoves);
-            EmitTriggers(atomicTriggers);
+            EmitTriggers(btriggers);
+            MoveCards(moves);
+            EmitTriggers(triggers);
         }
 
         private void AddAtomicMoves(List<CardsMovement> moves)
@@ -786,6 +830,7 @@ namespace Sanguosha.Core.Games
                 CardsMovement newM = new CardsMovement();
                 newM.Cards = m.Cards;
                 newM.To = new DeckPlace(m.To.Player, m.To.DeckType);
+                newM.Helper = new MovementHelper(m.Helper);
                 atomicMoves.Add(newM);
                 i++;
             }
@@ -795,7 +840,7 @@ namespace Sanguosha.Core.Games
         ///YOU ARE NOT ALLOWED TO TRIGGER ANY EVENT ANYWHERE INSIDE THIS FUNCTION!!!!!
         ///你不可以在这个函数中触发任何事件!!!!!
         ///</remarks>
-        public void MoveCards(List<CardsMovement> moves, List<bool> insertBefore = null)
+        public void MoveCards(List<CardsMovement> moves, List<bool> insertBefore = null, GameDelayTypes delay = GameDelayTypes.CardTransfer)
         {
             if (atomic)
             {
@@ -841,6 +886,7 @@ namespace Sanguosha.Core.Games
                         e.RegisterTriggers(move.To.Player);
                     }
                     decks[card.Place].Remove(card);
+                    int isLastHandCard = (card.Place.DeckType == DeckType.Hand && decks[card.Place].Count == 0) ? 1 : 0;
                     if (insertBefore != null && insertBefore[i])
                     {
                         decks[move.To].Insert(0, card);
@@ -873,6 +919,7 @@ namespace Sanguosha.Core.Games
                         _ResetCard(card);
                         if (card.Attributes != null) card.Attributes.Clear();
                     }
+                    card[Card.IsLastHandCard] = isLastHandCard;
 
                     if (IsClient && (move.To.DeckType == DeckType.Hand && GameClient.SelfId != move.To.Player.Id))
                     {
@@ -885,13 +932,15 @@ namespace Sanguosha.Core.Games
                 }
                 i++;
             }
+            GameDelays.Delay(delay);
         }
 
-        public void MoveCards(CardsMovement move, bool insertBefore = false)
+        public void MoveCards(CardsMovement move, bool insertBefore = false, GameDelayTypes delay = GameDelayTypes.CardTransfer)
         {
+            if (move.Cards.Count == 0) return;
             List<CardsMovement> moves = new List<CardsMovement>();
             moves.Add(move);
-            MoveCards(moves, new List<bool>() { insertBefore });
+            MoveCards(moves, new List<bool>() { insertBefore }, delay);
         }
 
         public Card PeekCard(int i)
@@ -943,8 +992,7 @@ namespace Sanguosha.Core.Games
             CardsMovement move = new CardsMovement();
             move.Cards = cardsDrawn;
             move.To = new DeckPlace(player, DeckType.Hand);
-            MoveCards(move);
-            GameDelays.Delay(GameDelayTypes.Draw);
+            MoveCards(move, false, GameDelayTypes.Draw);
             PlayerAcquiredCard(player, cardsDrawn);
         }
 

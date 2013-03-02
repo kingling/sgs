@@ -25,6 +25,7 @@ using System.Net.NetworkInformation;
 using System.Net;
 using System.Net.Security;
 using Sanguosha.Core.Utils;
+using System.Diagnostics;
 
 namespace Sanguosha.UI.Main
 {
@@ -151,6 +152,7 @@ namespace Sanguosha.UI.Main
         private void _startClient()
         {
             string userName = tab0UserName.Text;
+            string passwd = tab0Password.Text;
             Properties.Settings.Default.LastHostName = tab0HostName.Text;
             Properties.Settings.Default.LastUserName = tab0UserName.Text;
             Properties.Settings.Default.Save();
@@ -186,11 +188,20 @@ namespace Sanguosha.UI.Main
                     var channelFactory = new DuplexChannelFactory<ILobbyService>(lobbyModel, binding, endpoint);
                     server = channelFactory.CreateChannel();
                     Account ret;
-                    var stat = server.Login(Misc.ProtocolVersion, userName, out token, out ret, out reconnect);
+                    var stat = server.Login(Misc.ProtocolVersion, userName, passwd, out token, out ret, out reconnect);
                     if (stat == LoginStatus.Success)
                     {
                         LobbyViewModel.Instance.CurrentAccount = ret;
-                    }
+                        
+                        if (reconnect != null)
+                        {
+                            Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
+                            {
+                                MainGame.BackwardNavigationService = this.NavigationService;
+                                busyIndicator.BusyContent = Resources["Busy.Reconnecting"];
+                            });                            
+                        }
+                    }                    
                     ea.Result = stat;
                 }
                 catch (Exception e)
@@ -201,16 +212,26 @@ namespace Sanguosha.UI.Main
 
             worker.RunWorkerCompleted += (o, ea) =>
             {
-                busyIndicator.IsBusy = false;
                 bool success = false;
                 if ((LoginStatus)ea.Result == LoginStatus.Success)
                 {
-                    LobbyView lobby = LobbyView.Instance;
+                    LobbyView lobby = LobbyView.Instance;                    
+                    LobbyView.Instance.OnNavigateBack += lobby_OnNavigateBack;
                     var lobbyModel = LobbyViewModel.Instance;
                     lobbyModel.Connection = server;
                     lobbyModel.LoginToken = token;
-                    this.NavigationService.Navigate(lobby);
-                    if (reconnect != null) lobbyModel.NotifyGameStart(reconnect);
+
+                    if (reconnect == null)
+                    {
+                        this.NavigationService.Navigate(lobby);
+                        busyIndicator.IsBusy = false;
+                    }
+                    else
+                    {
+                        lobbyModel.NotifyGameStart(reconnect);
+                        busyIndicator.IsBusy = true;
+                    }
+
                     success = true;
                 }
                 if (!success)
@@ -227,6 +248,74 @@ namespace Sanguosha.UI.Main
                     {
                         MessageBox.Show("Failed to launch client");
                     }
+                    busyIndicator.IsBusy = false;
+                }
+            };
+
+            worker.RunWorkerAsync();
+        }
+
+        private void _createAccount()
+        {
+            string userName = tab0UserName.Text;
+            string passwd = tab0Password.Text;
+            Properties.Settings.Default.LastHostName = tab0HostName.Text;
+            Properties.Settings.Default.LastUserName = tab0UserName.Text;            
+            Properties.Settings.Default.Save();
+#if !DEBUG
+            if (string.IsNullOrEmpty(userName))
+            {
+                _Warn("Please provide a username");
+                return;
+            }
+#endif
+            busyIndicator.BusyContent = Resources["Busy.ConnectServer"];
+            busyIndicator.IsBusy = true;
+            ILobbyService server = null;
+            string hostName = tab0HostName.Text;
+            if (!hostName.Contains(":"))
+            {
+                hostName = hostName + ":" + DefaultLobbyPort;
+            }
+
+            BackgroundWorker worker = new BackgroundWorker();
+
+            worker.DoWork += (o, ea) =>
+            {
+                try
+                {
+                    ea.Result = LoginStatus.UnknownFailure;
+                    var binding = new NetTcpBinding();
+                    binding.Security.Mode = SecurityMode.None;
+                    var endpoint = new EndpointAddress(string.Format("net.tcp://{0}/GameService", hostName));
+                    var channelFactory = new DuplexChannelFactory<ILobbyService>(LobbyViewModel.Instance, binding, endpoint);
+                    server = channelFactory.CreateChannel();                    
+                    var stat = server.CreateAccount(userName, passwd);
+                    ea.Result = stat;
+                }
+                catch (Exception e)
+                {
+                    string s = e.StackTrace;
+                }
+            };
+
+            worker.RunWorkerCompleted += (o, ea) =>
+            {
+                busyIndicator.IsBusy = false;
+                switch((LoginStatus)ea.Result)
+                {
+                    case LoginStatus.Success:
+                        MessageBox.Show("Account created successfully");
+                        break;
+                    case LoginStatus.OutdatedVersion:                    
+                        MessageBox.Show("Outdated version. Please update.");
+                        break;                    
+                    case LoginStatus.InvalidUsernameAndPassword:
+                        MessageBox.Show("Invalid Username and Password.");
+                        break;
+                    default: 
+                        MessageBox.Show("Failed to launch client.");
+                        break;
                 }
             };
 
@@ -259,13 +348,14 @@ namespace Sanguosha.UI.Main
 
             //client.Start(isReplay, FileStream = file.open(...))
             BackgroundWorker worker = new BackgroundWorker();
+            bool noDatabase = !(tab1EnableDb.IsChecked == true);
 
             worker.DoWork += (o, ea) =>
             {
                 try
                 {
                     ea.Result = false;
-                    gameService = new LobbyServiceImpl();
+                    gameService = new LobbyServiceImpl(noDatabase);
                     gameService.HostingIp = serverIp;
 
                     host = new ServiceHost(gameService);
@@ -333,6 +423,7 @@ namespace Sanguosha.UI.Main
             {
                 client = new Client();                
                 game = new MainGame();
+                game.OnNavigateBack += game_OnNavigateBack;
                 client.StartReplay(File.Open(fileName, FileMode.Open));
                 game.NetworkClient = client;
             }
@@ -342,10 +433,25 @@ namespace Sanguosha.UI.Main
                 return;
             }
             if (game != null)
-            {            
-                this.NavigationService.Navigate(game);
+            {
+                MainGame.BackwardNavigationService = this.NavigationService;
+                game.Start();
+                // this.NavigationService.Navigate(game);
             }
+        }
 
+        private static void game_OnNavigateBack(object sender, NavigationService service)
+        {
+            MainGame game = sender as MainGame;
+            if (game != null) game.OnNavigateBack -= game_OnNavigateBack;
+            service.Navigate(new Login());            
+        }
+        
+        private static void lobby_OnNavigateBack(object sender, NavigationService service)
+        {
+            LobbyView lobby = sender as LobbyView;
+            if (lobby != null) lobby.OnNavigateBack -= lobby_OnNavigateBack;
+            service.Navigate(new Login());
         }
 
         #region Network Related
@@ -402,6 +508,16 @@ namespace Sanguosha.UI.Main
         private void tab1Adaptors_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             _ListIpAddresses();
+        }
+
+        private void tab1ClearDb_Click(object sender, System.Windows.RoutedEventArgs e)
+        {
+            LobbyServiceImpl.WipeDatabase();
+        }
+
+        private void btnRegister_Click(object sender, System.Windows.RoutedEventArgs e)
+        {
+            _createAccount();
         }
         #endregion
     }

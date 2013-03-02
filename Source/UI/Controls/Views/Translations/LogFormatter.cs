@@ -55,6 +55,53 @@ namespace Sanguosha.UI.Controls
             return name;
         }
 
+        public static List<Inline> Format(string format, List<IList<Inline>> args)
+        {
+            if (args == null || args.Count == 0) return new List<Inline>() { new Run(format) };
+
+            List<Inline> result = new List<Inline>();
+            string separator = "|";
+            List<string> separators = new List<string>();
+
+            int i = 0;
+            for (i = 0; i < args.Count; i++) separators.Add(separator);
+            string temp = string.Format(format, separators.ToArray());
+
+            i = 0;
+            foreach (string s in temp.Split(separator.ToCharArray()))
+            {
+                if (s != string.Empty) result.Add(new Run(s));
+                if (i < args.Count) result.AddRange(args[i]);
+                i++;
+            }
+            return result;
+        }
+
+        public static IList<Inline> TranslateLogEvent(Prompt custom, bool useUICard = true)
+        {
+            string format = Application.Current.TryFindResource(custom.ResourceKey) as string;
+            if (format == null)
+            {
+                return new List<Inline>() { new Run(custom.ResourceKey) };
+            }
+            List<IList<Inline>> values = new List<IList<Inline>>();
+            foreach (object arg in custom.Values)
+            {
+                IList<Inline> value = new List<Inline>();
+                if (arg is Player) value.Add(new Run(Translate(arg as Player)));
+                else if (arg is Card) value = RichTranslate(arg as Card, useUICard);
+                else if (arg is ISkill) value = RichTranslate(arg as ISkill);
+                else if (arg is CardHandler) value = RichTranslate(arg as CardHandler);
+                else if (arg is Prompt) value.Add(new Run(PromptFormatter.Format(arg as Prompt)));
+                if (value.Count == 0)
+                {
+                    value.Add(new Run(arg.ToString()));
+                }
+                values.Add(value);
+            }
+            return Format(format, values);
+        }
+
         public static string TranslateCardFootnote(ActionLog log)
         {
             string source = Translate(log.Source);
@@ -86,6 +133,8 @@ namespace Sanguosha.UI.Controls
                     }
                 case GameAction.ReplaceJudge:
                     return string.Concat(source, skill, "改判");
+                case GameAction.Reforge:
+                    return string.Concat(source, skill, "重铸");
             }
             return string.Empty;
         }
@@ -127,6 +176,11 @@ namespace Sanguosha.UI.Controls
             else if (cards.Count > 1 || cards[0].Id < 0)
             {
                 list.Add(new Run(string.Format("{0}张卡牌", cards.Count)));
+            }
+
+            if (cards.Any(c => c.Id < 0) && cards.Any(c => c.Id > 0))
+            {
+                list.Add(new Run("，其中有"));
             }
 
             foreach (var card in cards)
@@ -427,10 +481,11 @@ namespace Sanguosha.UI.Controls
                         paragraph.Inlines.Add(string.Format("置于武将牌上"));
                         added = false;
                     }
-                    else
+                    else if (dest.DeckType == DeckType.Hand)
                     {
                         paragraph.Inlines.Add(string.Format("{0}获得了", destStr));
                     }
+                    else added = false;
                 }
                 else if (dest.DeckType == DeckType.Hand || dest.DeckType == DeckType.Equipment)
                 {
@@ -444,6 +499,12 @@ namespace Sanguosha.UI.Controls
                     {
                         List<Player> players = new List<Player>(owners);
                         paragraph.Inlines.Add(string.Format("{0}获得了{1}的", destStr, Translate(players)));
+                        if (dest.DeckType == DeckType.Equipment)
+                        {
+                            paragraph.Inlines.AddRange(cardsInline);
+                            paragraph.Inlines.Add(string.Format("并装备上"));
+                            added = false;
+                        }
                     }
                 }
                 else
@@ -577,6 +638,15 @@ namespace Sanguosha.UI.Controls
             para.Inlines.Add(Translate(player));
             para.Inlines.Add(cards.Count == 1 ? "展示了一张手牌" : "展示了手牌");
             para.Inlines.AddRange(RichTranslate(cards));
+            return para;
+        }
+
+        internal static Paragraph RichTranslateReforgeCard(Player player, ICard card)
+        {
+            Paragraph para = new Paragraph();
+            para.Inlines.Add(Translate(player));
+            para.Inlines.Add("重铸了");
+            para.Inlines.AddRange(card is CompositeCard ? RichTranslate((card as CompositeCard).Subcards) : RichTranslate(card));
             return para;
         }
 

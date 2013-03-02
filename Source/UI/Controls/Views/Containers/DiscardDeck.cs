@@ -16,13 +16,22 @@ namespace Sanguosha.UI.Controls
         DispatcherTimer _cleanUpCounter;
         int _currentTime;
 
+        private EventHandler _cleanUpHandler;
+
         public DiscardDeck()
         {
             _cleanUpCounter = new DispatcherTimer();
             _cleanUpCounter.Interval = TimeSpan.FromSeconds(1.0);
-            _cleanUpCounter.Tick += _cleanUpCounter_Elapsed;
+            _cleanUpHandler = _cleanUpCounter_Elapsed;
+            _cleanUpCounter.Tick += _cleanUpHandler;
             _cleanUpCounter.Start();
             _currentTime = 0;
+            this.Unloaded += DiscardDeck_Unloaded;
+        }
+
+        void DiscardDeck_Unloaded(object sender, RoutedEventArgs e)
+        {
+            _cleanUpCounter.Tick -= _cleanUpHandler;
         }
 
         private static int _ClearanceTimeAllowance = 5;
@@ -91,8 +100,26 @@ namespace Sanguosha.UI.Controls
             }
         }
 
+        private void FilterExistingCards(IList<CardView> cards)
+        {            
+            int total = Cards.Count;
+            for (int i = 0; i < total; i++)
+            {
+                var card = Cards[i];
+                if (!cards.Any(c2 => card.CardModel.Card == c2.CardModel.Card))
+                {
+                    continue;
+                }
+                card.Disappear(0d, true);
+                Cards.RemoveAt(i);
+                i--;
+                total--;
+            }
+        }
+
         public override void AppendCards(IList<CardView> cards)
         {
+            FilterExistingCards(cards);
             foreach (var card in cards)
             {
                 card.CardModel.IsFootnoteVisible = true;
@@ -106,6 +133,7 @@ namespace Sanguosha.UI.Controls
 
         public override void AddCards(IList<CardView> cards)
         {
+            FilterExistingCards(cards);
             foreach (var card in cards)
             {
                 card.CardModel.IsFootnoteVisible = true;
@@ -153,7 +181,7 @@ namespace Sanguosha.UI.Controls
 
             // Do not show cards that move from compute area to discard area
             // or from judge result area to discard aresa
-            if (from != DeckType.Compute && from != DeckType.JudgeResult && from != DeckType.Dealing)
+            if (from != DeckType.Compute && (from != DeckType.JudgeResult || from == DeckType.JudgeResult && deck != DeckType.Discard) && from != DeckType.Dealing)
             {
                 AddCards(cards);
                 // Card just entered compute area should hold until they enter discard area.

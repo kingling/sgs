@@ -10,6 +10,8 @@ using Sanguosha.Core.Heroes;
 using Sanguosha.Core.Games;
 using System.Collections.ObjectModel;
 using Sanguosha.Lobby.Core;
+using Sanguosha.Core.Triggers;
+using Sanguosha.Core.Cards;
 
 namespace Sanguosha.Core.Players
 {   
@@ -28,6 +30,8 @@ namespace Sanguosha.Core.Players
             equipmentSkills = new List<ISkill>();
             additionalSkills = new List<ISkill>();
             additionalUndeletableSkills = new List<ISkill>();
+            AssociatedPlayerAttributes = new Dictionary<PlayerAttribute, PlayerAttribute>();
+            AssociatedCardAttributes = new Dictionary<CardAttribute, CardAttribute>();
         }
 
         int id;
@@ -189,16 +193,23 @@ namespace Sanguosha.Core.Players
         }
 
         private void SetHero(ref Hero hero, Hero value)
-        {            
+        {
+            if (hero != null)
+            {
+                PropertyChangedEventHandler handler = PropertyChanged;
+                hero.PropertyChanged -= handler;
+            }
             hero = value;
             if (hero != null)
             {
                 foreach (ISkill skill in hero.Skills)
                 {
+                    skill.HeroTag = hero;
                     skill.Owner = this;
                 }
                 Trace.Assert(hero.Owner == null);
-                hero.Owner = this;                
+                hero.Owner = this;          
+                hero.PropertyChanged += PropertyChanged;
             }
             OnPropertyChanged("Skills");
         }
@@ -260,8 +271,9 @@ namespace Sanguosha.Core.Players
         }
 
 
-        public void AcquireAdditionalSkill(ISkill skill, bool undeletable = false)
+        public void AcquireAdditionalSkill(ISkill skill, Hero tag, bool undeletable = false)
         {
+            skill.HeroTag = tag;
             skill.Owner = this;
             if (undeletable)
             {
@@ -276,6 +288,7 @@ namespace Sanguosha.Core.Players
 
         public void LoseAdditionalSkill(ISkill skill, bool undeletable = false)
         {
+            skill.HeroTag = null;
             skill.Owner = null;
             if (undeletable)
             {
@@ -373,7 +386,84 @@ namespace Sanguosha.Core.Players
             get { return isTargeted; }
             set { isTargeted = value; OnPropertyChanged("IsTargeted"); }
         }
-        
+
+        public void LoseAllHeroSkills(Hero h)
+        {
+            Trace.Assert(h.Owner == this);
+            List<ISkill> skills = new List<ISkill>(h.Skills);
+            h.LoseAllSkills();
+            if (skills.Count > 0)
+            {
+                SkillSetChangedEventArgs arg = new SkillSetChangedEventArgs();
+                arg.Source = this;
+                arg.IsLosingSkill = true;
+                arg.Skills = skills;
+                Game.CurrentGame.Emit(GameEvent.PlayerSkillSetChanged, arg);
+            }
+        }
+
+        public void LoseAllHerosSkills()
+        {
+            Trace.Assert(Hero != null);
+            List<ISkill> skills = new List<ISkill>(Hero.Skills);
+            Hero.LoseAllSkills();
+            if (Hero2 != null)
+            {
+                skills.AddRange(Hero2.Skills);
+                Hero2.LoseAllSkills();
+            }
+            if (skills.Count > 0)
+            {
+                SkillSetChangedEventArgs arg = new SkillSetChangedEventArgs();
+                arg.Source = this;
+                arg.IsLosingSkill = true;
+                arg.Skills = skills;
+                Game.CurrentGame.Emit(GameEvent.PlayerSkillSetChanged, arg);
+            }
+        }
+
+        public ISkill LoseHeroSkill(ISkill skill, Hero heroTag)
+        {
+            Trace.Assert(heroTag != null && heroTag.Owner == this);
+            ISkill sk = heroTag.LoseSkill(skill);
+            if (sk != null)
+            {
+                SkillSetChangedEventArgs arg = new SkillSetChangedEventArgs();
+                arg.Source = this;
+                arg.IsLosingSkill = true;
+                arg.Skills.Add(sk);
+                Game.CurrentGame.Emit(GameEvent.PlayerSkillSetChanged, arg);
+            }
+            return sk;
+        }
+
+        public ISkill LoseHeroSkill(string skillName, Hero heroTag)
+        {
+            Trace.Assert(heroTag != null && heroTag.Owner == this);
+            ISkill skill = heroTag.LoseSkill(skillName);
+            if (skill != null)
+            {
+                SkillSetChangedEventArgs arg = new SkillSetChangedEventArgs();
+                arg.Source = this;
+                arg.IsLosingSkill = true;
+                arg.Skills.Add(skill);
+                Game.CurrentGame.Emit(GameEvent.PlayerSkillSetChanged, arg);
+            }
+            return skill;
+        }
+
+        internal IDictionary<PlayerAttribute, PlayerAttribute> AssociatedPlayerAttributes
+        {
+            get;
+            private set;
+        }
+
+        internal IDictionary<CardAttribute, CardAttribute> AssociatedCardAttributes
+        {
+            get;
+            private set;
+        }
+
         public static PlayerAttribute RangeMinus = PlayerAttribute.Register("RangeMinus", false);
         public static PlayerAttribute RangePlus = PlayerAttribute.Register("RangePlus", false);
         public static PlayerAttribute AttackRange = PlayerAttribute.Register("AttackRange", false);

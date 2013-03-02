@@ -27,7 +27,6 @@ namespace Sanguosha.Expansions.OverKnightFame11.Skills
             {
                 return;
             }
-            int answer = 0;
             var cardsToProcess = new List<Card>(
                                  from c in eventArgs.Cards
                                  where c.Suit == SuitType.Club
@@ -37,19 +36,41 @@ namespace Sanguosha.Expansions.OverKnightFame11.Skills
                 CardsMovement temp = new CardsMovement();
                 temp.Cards = new List<Card>(cardsToProcess);
                 temp.To = new DeckPlace(null, DeckType.Discard);
-                Game.CurrentGame.NotificationProxy.NotifyCardMovement(new List<CardsMovement>() { temp });
                 foreach (Card cc in cardsToProcess)
                 {
                     cc.PlaceOverride = new DeckPlace(null, DeckType.Discard);
                 }
+                Game.CurrentGame.NotificationProxy.NotifyCardMovement(new List<CardsMovement>() { temp });
             }
+            else return;
+            List<OptionPrompt> prompts = new List<OptionPrompt>();
+            if (cardsToProcess.Count > 1)
+            {
+                prompts.Add(OptionPrompt.NoChoice);
+                prompts.Add(new OptionPrompt("LuoYingQuanBu"));
+                prompts.Add(new OptionPrompt("LuoYingBuFen"));
+            }
+            else prompts.AddRange(OptionPrompt.YesNoChoices);
+            int choiceIndex = 0;
+            Owner.AskForMultipleChoice(new MultipleChoicePrompt(Prompt.SkillUseYewNoPrompt, this), prompts, out choiceIndex);
+            if (choiceIndex == 0) return;
+            if (choiceIndex == 1) NotifySkillUse();
             foreach (var c in cardsToProcess)
             {
                 var prompt = new MultipleChoicePrompt("LuoYing", c);
-                if (Owner.AskForMultipleChoice(prompt, Prompt.YesNoChoices, out answer) && answer == 1)
+                int answer = 0;
+                if (choiceIndex == 1 || Owner.AskForMultipleChoice(prompt, Prompt.YesNoChoices, out answer) && answer == 1)
                 {
-                    NotifySkillUse();
-                    Game.CurrentGame.HandleCardTransferToHand(null, Owner, new List<Card>() { c });
+                    if (choiceIndex == 2) NotifySkillUse();
+                    c.Log = new ActionLog();
+                    c.Log.SkillAction = this;
+                    CardsMovement temp = new CardsMovement();
+                    temp.Cards.Add(c);
+                    temp.To = new DeckPlace(null, new DeckType("LuoYing"));
+                    c.PlaceOverride = new DeckPlace(null, DeckType.Discard);
+                    Game.CurrentGame.NotificationProxy.NotifyCardMovement(new List<CardsMovement>() { temp });
+                    c.Log = new ActionLog();
+                    Game.CurrentGame.HandleCardTransferToHand(c.Owner, Owner, new List<Card>() { c }, new MovementHelper() { IsFakedMove = true, AlwaysShowLog = true });
                     eventArgs.Cards.Remove(c);
                 }
             }
@@ -63,7 +84,7 @@ namespace Sanguosha.Expansions.OverKnightFame11.Skills
                 TriggerCondition.Global
             ) { IsAutoNotify = false, AskForConfirmation = false };
             Triggers.Add(GameEvent.CardsEnteringDiscardDeck, trigger);
-            IsAutoInvoked = true;
+            IsAutoInvoked = null;
         }
     }
 }

@@ -29,6 +29,7 @@ namespace Sanguosha.Expansions.Basic.Cards
             public Equipment ParentEquipment { get; set; }
             protected void Run(Player Owner, GameEvent gameEvent, GameEventArgs eventArgs)
             {
+                Core.Utils.GameDelays.Delay(Core.Utils.GameDelayTypes.HanBingJian);
                 Player dest = eventArgs.Targets[0];
                 for (int i = 0; i < 2 && Game.CurrentGame.Decks[dest, DeckType.Hand].Concat(Game.CurrentGame.Decks[dest, DeckType.Equipment]).Count() > 0; i++)
                 {
@@ -62,7 +63,7 @@ namespace Sanguosha.Expansions.Basic.Cards
                     this,
                     (p, e, a) =>
                     {
-                        return (a.Card != null) && (a.Card.Type is Sha) && (Game.CurrentGame.Decks[a.Targets[0], DeckType.Hand].Count > 0 || Game.CurrentGame.Decks[a.Targets[0], DeckType.Equipment].Count > 0);
+                        return (a.ReadonlyCard != null) && (a.ReadonlyCard.Type is Sha) && (a as DamageEventArgs).OriginalTarget == a.Targets[0] && a.Targets[0].HandCards().Count + a.Targets[0].Equipments().Count > 0;
                     },
                     Run,
                     TriggerCondition.OwnerIsSource

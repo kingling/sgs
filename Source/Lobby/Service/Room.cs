@@ -11,11 +11,7 @@ namespace Sanguosha.Lobby.Core
     public enum RoomType
     {
         [EnumMember]
-        RoleOneDefector,
-        [EnumMember]
-        RoleNoDefector,
-        [EnumMember]
-        RoleTwoDefectors,
+        Role,
     }
 
     [DataContract(Name = "RoomType")]
@@ -34,9 +30,9 @@ namespace Sanguosha.Lobby.Core
         public Room()
         {
             seats = new List<Seat>();
-            TimeOutSeconds = 15;
         }
 
+       
         private int id;
 
         public int Id
@@ -60,13 +56,7 @@ namespace Sanguosha.Lobby.Core
             get { return type; }
             set { type = value; }
         }
-        private int timeOutSeconds;
-
-        public int TimeOutSeconds
-        {
-            get { return timeOutSeconds; }
-            set { timeOutSeconds = value; }
-        }
+        
         private RoomState state;
 
         public RoomState State
@@ -122,6 +112,6 @@ namespace Sanguosha.Lobby.Core
             set { ipPort = value; }
         }
 
-
+        public RoomSettings Settings { get; set; }
     }
 }

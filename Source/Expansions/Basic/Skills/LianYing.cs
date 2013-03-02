@@ -24,8 +24,9 @@ namespace Sanguosha.Expansions.Basic.Skills
         {
             var trigger = new AutoNotifyPassiveSkillTrigger(
                 this,
+                (p, e, a) => { return a.Cards.Any(c => c[Card.IsLastHandCard] == 1); },
                 (p, e, a) => { Game.CurrentGame.DrawCards(Owner, 1); },
-                TriggerCondition.OwnerIsSource | TriggerCondition.SourceHasNoHandCards
+                TriggerCondition.OwnerIsSource
             ) { Priority = SkillPriority.LianYing };
             Triggers.Add(GameEvent.CardsLost, trigger);
             IsAutoInvoked = true;

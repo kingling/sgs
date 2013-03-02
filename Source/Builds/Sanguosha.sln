@@ -45,7 +45,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Server", "..\Lobby\Server\S
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Core", "..\Lobby\Service\Core.csproj", "{7DE81BE7-26D1-4954-9037-B7184C1DF9BD}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BronzeSparrowTerrace", "..\Expansions\BronzeSparrowTerrace\BronzeSparrowTerrace.csproj", "{FBE66AFE-CA51-45FF-9546-E16C17527BAA}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Assassin", "..\Expansions\Assassin\Assassin.csproj", "{FBE66AFE-CA51-45FF-9546-E16C17527BAA}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

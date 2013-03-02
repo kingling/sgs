@@ -26,7 +26,7 @@ namespace Sanguosha.Core.UI
             get { return isPlayerRepeatable; }
             set { isPlayerRepeatable = value; }
         }
-        
+
         private bool isActionStage;
 
         /// <summary>
@@ -89,6 +89,23 @@ namespace Sanguosha.Core.UI
             get { return otherDecksUsed; }
             set { otherDecksUsed = value; }
         }
+
+        private int extraTimeOutSeconds;
+
+        public int ExtraTimeOutSeconds
+        {
+            get { return extraTimeOutSeconds; }
+            set { extraTimeOutSeconds = value; }
+        }
+
+        private bool showToAll;
+
+        public bool ShowToAll
+        {
+            get { return showToAll; }
+            set { showToAll = value; }
+        }
+
     }
 
     public interface ICardUsageVerifier

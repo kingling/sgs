@@ -29,13 +29,14 @@ namespace Sanguosha.Expansions.Hills.Skills
 
         static PrivateDeckType HuaShenDeck = new PrivateDeckType("HuaShen");
 
-        public static void AcquireHeroCard(Player player)
+        public static void AcquireHeroCard(Player player, Hero tag)
         {
             Card card = Game.CurrentGame.Decks[DeckType.Heroes][0];
             Game.CurrentGame.SyncImmutableCard(player, card);
             CardsMovement move = new CardsMovement();
             move.Cards = new List<Card>() { card };
             move.To = new DeckPlace(player, HuaShenDeck);
+            move.Helper.PrivateDeckHeroTag = tag;
             Game.CurrentGame.MoveCards(move);
         }
 
@@ -52,7 +53,7 @@ namespace Sanguosha.Expansions.Hills.Skills
                 new List<DeckPlace>() { new DeckPlace(Owner, HuaShenDeck) },
                 new List<string>() { "HuaShen" },
                 new List<int>() { 1 },
-                new RequireOneCardChoiceVerifier(),
+                new RequireOneCardChoiceVerifier(false, true),
                 out answer))
             {
                 Trace.TraceInformation("Invalid answer, choosing for you");
@@ -74,15 +75,18 @@ namespace Sanguosha.Expansions.Hills.Skills
             int skanswer;
             Game.CurrentGame.UiProxies[Owner].AskForMultipleChoice(new MultipleChoicePrompt("HuaShen"), hsOptions, out skanswer);
             acquiredSkill = skills[skanswer];
-            Owner.Allegiance = handler.Hero.Allegiance;
-            Owner.IsMale = handler.Hero.IsMale;
-            Owner.IsFemale = !handler.Hero.IsMale;
-            Game.CurrentGame.NotificationProxy.NotifyImpersonation(Owner, handler.Hero, acquiredSkill);
-            Game.CurrentGame.HandleGodHero(Owner);
-            Game.CurrentGame.Emit(GameEvent.PlayerChangedAllegiance, new GameEventArgs() { Source = Owner });
-            Game.CurrentGame.PlayerAcquireSkill(Owner, acquiredSkill);
+            Game.CurrentGame.NotificationProxy.NotifyImpersonation(Owner, HeroTag, handler.Hero, acquiredSkill);
+            if (Game.CurrentGame.IsMainHero(HeroTag, Owner))
+            {
+                Owner.Allegiance = handler.Hero.Allegiance;
+                Owner.IsMale = handler.Hero.IsMale;
+                Owner.IsFemale = !handler.Hero.IsMale;
+                Game.CurrentGame.HandleGodHero(Owner);
+                Game.CurrentGame.Emit(GameEvent.PlayerChangedAllegiance, new GameEventArgs() { Source = Owner });
+            }
+            Game.CurrentGame.PlayerAcquireAdditionalSkill(Owner, acquiredSkill, HeroTag);
             if (tempSkill != null)
-                Game.CurrentGame.PlayerLoseSkill(Owner, tempSkill);
+                Game.CurrentGame.PlayerLoseAdditionalSkill(Owner, tempSkill);
             return;
         }
 
@@ -91,10 +95,10 @@ namespace Sanguosha.Expansions.Hills.Skills
             Owner.Allegiance = Allegiance.Qun;
             Owner.IsMale = true;
             Owner.IsFemale = !Owner.IsMale;
-            Game.CurrentGame.NotificationProxy.NotifyImpersonation(Owner, null, null);
+            Game.CurrentGame.NotificationProxy.NotifyImpersonation(Owner, HeroTag, null, null);
             Game.CurrentGame.Emit(GameEvent.PlayerChangedAllegiance, new GameEventArgs() { Source = Owner });
             if (acquiredSkill != null && Owner.AdditionalSkills.Contains(acquiredSkill))
-                Game.CurrentGame.PlayerLoseSkill(Owner, acquiredSkill);
+                Game.CurrentGame.PlayerLoseAdditionalSkill(Owner, acquiredSkill);
         }
 
         public override Player Owner
@@ -121,8 +125,8 @@ namespace Sanguosha.Expansions.Hills.Skills
                 this,
                 (p, e, a) =>
                 {
-                    AcquireHeroCard(p);
-                    AcquireHeroCard(p);
+                    AcquireHeroCard(p, HeroTag);
+                    AcquireHeroCard(p, HeroTag);
                     Run(p, e, a);
                 },
                 TriggerCondition.OwnerIsSource
@@ -138,7 +142,7 @@ namespace Sanguosha.Expansions.Hills.Skills
             Triggers.Add(GameEvent.PhasePostEnd, trigger2);
 
             IsAutoInvoked = false;
-            ExtraCardsDeck = HuaShenDeck;
+            DeckCleanup.Add(HuaShenDeck);
         }
     }
 }

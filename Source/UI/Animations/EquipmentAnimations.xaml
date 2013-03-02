@@ -9,12 +9,15 @@
     <local:GuanShiAnimation x:Key="GuanShiFuSkill.Animation" />
     <local:QingLongAnimation x:Key="QingLongYanYueSkill.Animation" />
     <local:BaiYinAnimation x:Key="BaiYinShiZiSkill.Animation" />
-    <local:GuDingAnimation x:Key="GuDianDaoSkill.Animation" />
+    <local:GuDingAnimation x:Key="GuDingDaoSkill.Animation" />
     <local:RenWangAnimation x:Key="RenWangDunSkill.Animation" />
-    <local:ZhuQueAnimation x:Key="ZhuQueYuShanSkill.Animation" />
+    <local:ZhuQueAnimation x:Key="ZhuQueYuShanShaSkill.Animation" />
+    <local:ZhuQueAnimation x:Key="ZhuQueYuShanTransform.Animation" />
     <local:QingGangAnimation x:Key="QingGangJianSkill.Animation" />
     <local:HanBingAnimation x:Key="HanBingJianSkill.Animation" />
     <local:LianNuAnimation x:Key="ZhuGeLianNuSkill.Animation" />
     <local:FangTianAnimation x:Key="FangTianHuaJiSkill.Animation" />
     <local:QiLinAnimation x:Key="QiLinGongSkill.Animation" />
+    <local:TengJiaAnimation x:Key="TengJiaHurtSkill.Animation" />
+    <local:TengJiaAnimation2 x:Key="TengJiaSkill.Animation" />
 </ResourceDictionary>

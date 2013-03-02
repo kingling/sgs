@@ -31,6 +31,7 @@ using Sanguosha.Expansions.Battle.Cards;
 using Xceed.Wpf.Toolkit;
 using System.Windows.Media.Effects;
 using System.Windows.Threading;
+using Sanguosha.Core.Heroes;
 
 namespace Sanguosha.UI.Controls
 {
@@ -105,7 +106,6 @@ namespace Sanguosha.UI.Controls
             discardDeck.ParentCanvas = this.GlobalCanvas;
             this.DataContextChanged += GameView_DataContextChanged;
             this.SizeChanged += GameView_SizeChanged;
-            _mainPlayerPropertyChangedHandler = mainPlayer_PropertyChanged;
             gameLogs = new GameLogs();
             logDocs = new List<FlowDocument>() { gameLogs.GlobalLog };
             rtbLog.Document = gameLogs.GlobalLog;
@@ -126,8 +126,96 @@ namespace Sanguosha.UI.Controls
             {
                 pinDianWindow.Close();
             };
+            mainPlayerPanel.SetAnimationCenter(mainPlayerAnimationCenter);
             chatEventHandler = new ChatEventHandler(LobbyModel_OnChat);
             LobbyViewModel.Instance.OnChat += chatEventHandler;
+        }
+
+        Dictionary<KeyValuePair<Player, Player>, Line> _cueLines;
+        Dictionary<KeyValuePair<Player, Player>, Timeline> _lineUpAnimations;
+        // Dictionary<KeyValuePair<Player, Player>, Line> _cueLineGlows;
+
+        private static int _cueLineZIndex = 100000;
+
+        private void _CreateCueLines()
+        {
+            if (_cueLines != null)
+            {
+                foreach (var line in _cueLines.Values)
+                {
+                    GlobalCanvas.Children.Remove(line);
+                }
+            }
+
+            _cueLines = new Dictionary<KeyValuePair<Player, Player>, Line>();
+            _lineUpAnimations = new Dictionary<KeyValuePair<Player, Player>, Timeline>();
+            foreach (var source in playersMap.Keys)
+            {
+                foreach (var target in playersMap.Keys)
+                {
+                    if (source == target) continue;
+                    var key = new KeyValuePair<Player, Player>(source, target);
+                    Line line = new Line();
+                    line.StrokeDashCap = PenLineCap.Triangle;
+                    line.StrokeThickness = 1;
+                    line.Stroke = Resources["indicatorLineBrush"] as Brush;
+                    line.Effect = new DropShadowEffect() { ShadowDepth = 0, BlurRadius = 3, Color = Colors.White };
+                    line.Visibility = Visibility.Collapsed;
+                    line.SetValue(Canvas.ZIndexProperty, _cueLineZIndex);
+                    /* line2.Stroke = Resources["indicatorLineGlowBrush"] as Brush; */
+                    _cueLines.Add(key, line);
+
+                    var anim1 = new DoubleAnimation();
+                    anim1.Duration = _lineUpDuration;
+                    Storyboard.SetTarget(anim1, line);
+                    Storyboard.SetTargetProperty(anim1, new PropertyPath(Line.StrokeDashOffsetProperty));
+                    var anim2 = new ObjectAnimationUsingKeyFrames();
+                    anim2.Duration = _lineUpDuration;
+                    anim2.KeyFrames.Add(new DiscreteObjectKeyFrame(Visibility.Visible, KeyTime.FromPercent(0)));
+                    anim2.KeyFrames.Add(new DiscreteObjectKeyFrame(Visibility.Collapsed, KeyTime.FromPercent(1)));
+                    Storyboard.SetTarget(anim2, line);
+                    Storyboard.SetTargetProperty(anim2, new PropertyPath(Line.VisibilityProperty));
+
+                    Storyboard animation = new Storyboard();
+                    animation.FillBehavior = FillBehavior.Stop;
+                    animation.Children.Add(anim1);
+                    animation.Children.Add(anim2);
+                    animation.Duration = _lineUpDuration;
+
+                    _lineUpAnimations.Add(key, animation);
+
+                    GlobalCanvas.Children.Add(line);
+                }
+            }
+        }
+
+        private void _ResizeCueLines()
+        {
+            gridRoot.UpdateLayout();
+            foreach (var source in playersMap.Keys)
+            {
+                foreach (var target in playersMap.Keys)
+                {
+                    if (source == target) continue;
+                    var key = new KeyValuePair<Player, Player>(source, target);
+                    Line line = _cueLines[key];
+                    var src = playersMap[source];
+                    var dst = playersMap[target];
+                    var srcPoint = src.TranslatePoint(new Point(src.ActualWidth / 2, src.ActualHeight / 2), GlobalCanvas);
+                    var dstPoint = dst.TranslatePoint(new Point(dst.ActualWidth / 2, dst.ActualHeight / 2), GlobalCanvas);
+                    line.X1 = srcPoint.X;
+                    line.X2 = dstPoint.X;
+                    line.Y1 = srcPoint.Y;
+                    line.Y2 = dstPoint.Y;
+                    double distance = Math.Sqrt((srcPoint.X - dstPoint.X) * (srcPoint.X - dstPoint.X) + (srcPoint.Y - dstPoint.Y) * (srcPoint.Y - dstPoint.Y));
+                    line.StrokeDashArray = new DoubleCollection() { distance * 2.0, 10000d };
+                    line.StrokeDashOffset = distance * 2;
+
+                    var animation = (_lineUpAnimations[key] as Storyboard).Children[0] as DoubleAnimation;
+                    animation.From = distance * 2.0;
+                    animation.To = -distance;
+                }
+            }
         }
 
         private ChatEventHandler chatEventHandler;
@@ -169,6 +257,7 @@ namespace Sanguosha.UI.Controls
 
         #region Events
         public event EventHandler OnGameCompleted;
+        public event EventHandler OnUiAttached;
         #endregion
 
         #region Private Functions
@@ -178,8 +267,33 @@ namespace Sanguosha.UI.Controls
             GameSoundPlayer.PlayBackgroundMusic(GameSoundLocator.GetBgm());
         }
 
+        private void UserControl_Unloaded(object sender, RoutedEventArgs e)
+        {
+            LobbyViewModel.Instance.OnChat -= chatEventHandler;
+            CardView.ClearCache();
+            if (GameModel != null)
+            {
+                var model = GameModel;
+                foreach (var playerModel in GameModel.PlayerModels)
+                {
+                    playerModel.Player = null;
+                }
+                model.PropertyChanged -= model_PropertyChanged;
+                model.Game.PropertyChanged -= _game_PropertyChanged;
+                foreach (var playerModel in model.PlayerModels)
+                {
+                    playerModel.PropertyChanged -= _player_PropertyChanged;
+                }
+                model.MainPlayerModel.PropertyChanged -= mainPlayer_PropertyChanged;
+                GameModel.Game = null;
+            }
+            this.DataContext = null;
+
+        }
+
         private void _Resize(Size size)
         {
+            if (!(size.Width > 0 && size.Height > 0)) return;
             if (profileBoxes.Count == 0)
             {
                 return;
@@ -240,6 +354,9 @@ namespace Sanguosha.UI.Controls
                 playerView.UpdateCardAreas();
             }
             discardDeck.RearrangeCards();
+            _ResizeCueLines();
+            InvalidateMeasure();
+            InvalidateArrange();
         }
 
         private void _CreatePlayerInfoView(int indexInGameModel)
@@ -266,8 +383,6 @@ namespace Sanguosha.UI.Controls
 
             GameModel.MainPlayerSeatNumber = GameModel.Game.Players.IndexOf(view.PlayerModel.Player);
         }
-
-        private PropertyChangedEventHandler _mainPlayerPropertyChangedHandler;
 
         private void mainPlayer_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
@@ -323,18 +438,35 @@ namespace Sanguosha.UI.Controls
 
         private void GameView_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
         {
+            if (e.OldValue != null)
+            {
+                GameViewModel oldModel = e.OldValue as GameViewModel;
+                if (oldModel == null || oldModel.Game == null) return;
+                oldModel.PropertyChanged -= model_PropertyChanged;
+                oldModel.Game.PropertyChanged -= _game_PropertyChanged;
+                foreach (var playerModel in oldModel.PlayerModels)
+                {
+                    playerModel.PropertyChanged -= _player_PropertyChanged;
+                }
+                oldModel.MainPlayerModel.PropertyChanged -= mainPlayer_PropertyChanged;
+            }
+
             profileBoxes.Clear();
             playersMap.Clear();
             GameViewModel model = GameModel;
+
+            if (model == null) return;
+
             for (int i = 1; i < model.PlayerModels.Count; i++)
             {
                 _CreatePlayerInfoView(i);
             }
             playersMap.Add(model.MainPlayerModel.Player, mainPlayerPanel);
             RearrangeSeats();
-            _Resize(new Size(this.ActualWidth, this.ActualHeight));
-            model.PropertyChanged += new PropertyChangedEventHandler(model_PropertyChanged);
-            model.Game.PropertyChanged += new PropertyChangedEventHandler(_game_PropertyChanged);
+            _CreateCueLines();
+
+            model.PropertyChanged += model_PropertyChanged;
+            model.Game.PropertyChanged += _game_PropertyChanged;
             Trace.Assert(model.MainPlayerModel != null, "Main player must exist.");
 
             // Initialize game logs.
@@ -358,16 +490,18 @@ namespace Sanguosha.UI.Controls
 
             for (int i = 0; i < count; i++)
             {
-                model.PlayerModels[i].PropertyChanged += new PropertyChangedEventHandler(_player_PropertyChanged);
+                model.PlayerModels[i].PropertyChanged += _player_PropertyChanged;
             }
+            _Resize(new Size(this.ActualWidth, this.ActualHeight));
         }
 
         ChildWindow cardChoiceWindow;
         void _player_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
+            PlayerViewModel model = sender as PlayerViewModel;
+            if (model == null || model.Player == null) return;
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
-                PlayerViewModel model = sender as PlayerViewModel;
                 int count = GameModel.PlayerModels.Count;
                 if (e.PropertyName == "IsCardChoiceQuestionShown")
                 {
@@ -403,6 +537,7 @@ namespace Sanguosha.UI.Controls
                     }
                     else if (cardChoiceWindow != null)
                     {
+                        cardChoiceWindow.Content = null;
                         cardChoiceWindow.Close();
                         gridRoot.Children.Remove(cardChoiceWindow);
                         cardChoiceWindow = null;
@@ -431,6 +566,10 @@ namespace Sanguosha.UI.Controls
                 {
                     gameLogs.AppendPickHeroLog(model.Player, true);
                 }
+                else if (e.PropertyName == "Hero2")
+                {
+                    gameLogs.AppendPickHeroLog(model.Player, false);
+                }
             });
         }
 
@@ -439,11 +578,13 @@ namespace Sanguosha.UI.Controls
             if (e.PropertyName == "MainPlayerSeatNumber")
             {
                 RearrangeSeats();
+                _ResizeCueLines();
             }
         }
 
         void _game_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
+            if (ViewModelBase.IsDetached) return;
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
                 string name = e.PropertyName;
@@ -499,10 +640,10 @@ namespace Sanguosha.UI.Controls
             var oldMainPlayer = mainPlayerPanel.DataContext as PlayerViewModel;
             if (oldMainPlayer != null)
             {
-                oldMainPlayer.PropertyChanged -= _mainPlayerPropertyChangedHandler;
+                oldMainPlayer.PropertyChanged -= mainPlayer_PropertyChanged;
             }
             mainPlayerPanel.DataContext = model.MainPlayerModel;
-            model.MainPlayerModel.PropertyChanged += _mainPlayerPropertyChangedHandler;
+            model.MainPlayerModel.PropertyChanged += mainPlayer_PropertyChanged;
             playersMap[model.MainPlayerModel.Player] = mainPlayerPanel;
         }
 
@@ -627,74 +768,65 @@ namespace Sanguosha.UI.Controls
 
         private void _LineUp(Player source, IList<Player> targets)
         {
-            Storyboard lineUpGroup = new Storyboard();
-            List<Line> lines = new List<Line>();
-            var src = playersMap[source];
-            Point srcPoint = src.TranslatePoint(new Point(src.ActualWidth / 2, src.ActualHeight / 2), GlobalCanvas);
-            foreach (var target in targets)
+
+            Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
-                var dest = playersMap[target];
-                Point dstPoint = dest.TranslatePoint(new Point(dest.ActualWidth / 2, dest.ActualHeight / 2), GlobalCanvas);
-                double distance = Math.Sqrt((srcPoint.X - dstPoint.X) * (srcPoint.X - dstPoint.X) + (srcPoint.Y - dstPoint.Y) * (srcPoint.Y - dstPoint.Y));
-
-                Line line = new Line();
-                line.Stroke = Resources["indicatorLineBrush"] as Brush;
-                line.X1 = srcPoint.X;
-                line.X2 = dstPoint.X;
-                line.Y1 = srcPoint.Y;
-                line.Y2 = dstPoint.Y;
-                line.StrokeThickness = 1;
-                lines.Add(line);
-
-                Line line2 = new Line();
-                line2.Stroke = Resources["indicatorLineGlowBrush"] as Brush;
-                line2.X1 = srcPoint.X;
-                line2.X2 = dstPoint.X;
-                line2.Y1 = srcPoint.Y;
-                line2.Y2 = dstPoint.Y;
-                line2.StrokeThickness = 3;
-                lines.Add(line2);
-            }
-
-            foreach (var line in lines)
-            {
-                double distance = Math.Sqrt((line.X2 - line.X1) * (line.X2 - line.X1) + (line.Y2 - line.Y1) * (line.Y2 - line.Y1));
-                line.StrokeDashArray = new DoubleCollection() { distance * 2.0, 10000d };
-                line.StrokeDashOffset = distance;
-                line.StrokeDashCap = PenLineCap.Triangle;
-
-                DoubleAnimation animation = new DoubleAnimation(distance * 2.0, -distance, _lineUpDuration);
-                Storyboard.SetTarget(animation, line);
-                Storyboard.SetTargetProperty(animation, new PropertyPath(Line.StrokeDashOffsetProperty));
-                lineUpGroup.Children.Add(animation);
-                GlobalCanvas.Children.Add(line);
-                animation.Completed += (o, e) =>
+                Storyboard lineUpGroup = new Storyboard();
+                foreach (var target in targets)
                 {
-                    var da = (o as AnimationClock).Timeline;
-                    Line l = Storyboard.GetTarget(da) as Line;
-                    GlobalCanvas.Children.Remove(l);
-                };
-            }
-            lineUpGroup.AccelerationRatio = 0.6;
-            lineUpGroup.Begin();
+                    if (source == target) continue;
+                    var key = new KeyValuePair<Player, Player>(source, target);
+                    var animation = _lineUpAnimations[key];
+                    lineUpGroup.Children.Add(animation);
+                }
+                lineUpGroup.AccelerationRatio = 0.6;
+                lineUpGroup.Begin();
+            });
         }
 
 
+        #endregion
+
+        #region Private Functions
+        private void _AppendKeyEventLog(Paragraph log)
+        {
+            var doc = new FlowDocument();
+            var para = log;
+            if (para.Inlines.Count == 0) return;
+            doc.Blocks.Add(para);
+            keyEventLog.AddLog(doc);
+        }
+
+        private void _AppendKeyEventLog(Prompt custom, bool useUICard = true)
+        {
+            Paragraph para = new Paragraph();
+            para.Inlines.AddRange(LogFormatter.TranslateLogEvent(custom, useUICard));
+            _AppendKeyEventLog(para);
+        }
+
+        private void _AppendKeyEventLog(ActionLog log)
+        {
+            _AppendKeyEventLog(LogFormatter.RichTranslateKeyLog(log));
+        }
         #endregion
 
         #region INotificationProxy
 
         public void NotifyCardMovement(List<CardsMovement> moves)
         {
-            Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
+            if (ViewModelBase.IsDetached) return;
+
+            bool doWeaponSound = false;
+            bool doArmorSound = false;
+            bool doHorseSound = false;
+            foreach (CardsMovement move in moves)
             {
-                bool doWeaponSound = false;
-                bool doArmorSound = false;
-                bool doHorseSound = false;
-                foreach (CardsMovement move in moves)
+                if (move.Helper.IsWuGu)
                 {
-                    if (move.Helper.IsWuGu)
+                    Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
                     {
+                        // WuGuModel can be null if we missed NotifyWuGuStart during reconnection.
+                        if (GameModel.WuGuModel == null) return;
                         Trace.Assert(GameModel.WuGuModel != null);
                         Trace.Assert(move.Cards.Count == 1);
                         Trace.Assert(move.To.Player != null);
@@ -705,69 +837,85 @@ namespace Sanguosha.UI.Controls
                         cardModel.IsEnabled = false;
                         cardModel.Footnote = LogFormatter.Translate(move.To.Player);
                         cardModel.IsFootnoteVisible = true;
-                    }
+                    });
+                }
 
-                    var cardsToAdd = new List<CardView>();
-                    var cardsRemoved = new Dictionary<DeckPlace, List<Card>>();
+                var cardsToAdd = new List<CardView>();
+                var cardsRemoved = new Dictionary<DeckPlace, List<Card>>();
 
-                    foreach (Card card in move.Cards)
+                foreach (Card card in move.Cards)
+                {
+                    var place = card.PlaceOverride ?? card.Place;
+                    card.PlaceOverride = null;
+                    if (!cardsRemoved.ContainsKey(place))
                     {
-                        var place = card.PlaceOverride ?? card.Place;
-                        card.PlaceOverride = null;
-                        if (!cardsRemoved.ContainsKey(place))
-                        {
-                            cardsRemoved.Add(place, new List<Card>());
-                        }
-                        cardsRemoved[place].Add(card);
-                        if (move.To.DeckType == DeckType.Equipment)
-                        {
-                            if (card.Type is Weapon) doWeaponSound = true;
-                            else if (card.Type is Armor) doArmorSound = true;
-                            else if (card.Type is DefensiveHorse || card.Type is OffensiveHorse) doHorseSound = true;
-                        }
+                        cardsRemoved.Add(place, new List<Card>());
                     }
-                    foreach (var stackCards in cardsRemoved)
+                    cardsRemoved[place].Add(card);
+                    if (move.To.DeckType == DeckType.Equipment)
                     {
-                        IDeckContainer deck = _GetMovementDeck(stackCards.Key);
-                        IList<CardView> cards;
-                        Trace.Assert(move.Helper != null);
-                        if (!move.Helper.IsFakedMove)
+                        if (card.Type is Weapon) doWeaponSound = true;
+                        else if (card.Type is Armor) doArmorSound = true;
+                        else if (card.Type is DefensiveHorse || card.Type is OffensiveHorse) doHorseSound = true;
+                    }
+                }
+
+                foreach (var stackCards in cardsRemoved)
+                {
+                    IDeckContainer deck = _GetMovementDeck(stackCards.Key);
+                    IList<CardView> cards = null;
+                    Trace.Assert(move.Helper != null);
+                    if (!move.Helper.IsFakedMove || move.Helper.AlwaysShowLog)
+                    {
+                        Application.Current.Dispatcher.BeginInvoke((ThreadStart)delegate()
                         {
                             gameLogs.AppendCardMoveLog(stackCards.Value, stackCards.Key, move.To);
-                        }
-
-                        cards = deck.RemoveCards(stackCards.Key.DeckType, stackCards.Value);
-                        foreach (var card in cards)
-                        {
-                            card.CardModel.Update();
-                        }
-                        cardsToAdd.AddRange(cards);
+                        });
                     }
+                    Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
+                    {
+                        cards = deck.RemoveCards(stackCards.Key.DeckType, stackCards.Value);
+                    });
+                    Trace.Assert(cards != null);
+                    foreach (var card in cards)
+                    {
+                        Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
+                        {
+                            card.Update();
+                        });
+                    }
+                    cardsToAdd.AddRange(cards);
+                }
 
+                Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
+                {
                     _GetMovementDeck(move.To).AddCards(move.To.DeckType, cardsToAdd, move.Helper.IsFakedMove);
-                }
+                });
+            }
+            Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
+            {
                 rtbLog.ScrollToEnd();
-                if (doWeaponSound)
-                {
-                    Uri uri = GameSoundLocator.GetSystemSound("Weapon");
-                    GameSoundPlayer.PlaySoundEffect(uri);
-                }
-                if (doArmorSound)
-                {
-                    Uri uri = GameSoundLocator.GetSystemSound("Armor");
-                    GameSoundPlayer.PlaySoundEffect(uri);
-                }
-                if (doHorseSound)
-                {
-                    Uri uri = GameSoundLocator.GetSystemSound("Horse");
-                    GameSoundPlayer.PlaySoundEffect(uri);
-                }
-
-            }, System.Windows.Threading.DispatcherPriority.Send);
+            });
+            if (doWeaponSound)
+            {
+                Uri uri = GameSoundLocator.GetSystemSound("Weapon");
+                GameSoundPlayer.PlaySoundEffect(uri);
+            }
+            if (doArmorSound)
+            {
+                Uri uri = GameSoundLocator.GetSystemSound("Armor");
+                GameSoundPlayer.PlaySoundEffect(uri);
+            }
+            if (doHorseSound)
+            {
+                Uri uri = GameSoundLocator.GetSystemSound("Horse");
+                GameSoundPlayer.PlaySoundEffect(uri);
+            }
         }
 
         public void NotifyDamage(Player source, Player target, int magnitude, DamageElement element)
         {
+            if (ViewModelBase.IsDetached) return;
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
                 foreach (var profile in playersMap.Values)
@@ -786,150 +934,212 @@ namespace Sanguosha.UI.Controls
         }
 
         private static ResourceDictionary equipAnimationResources = new ResourceDictionary() { Source = new Uri("pack://application:,,,/Animations;component/EquipmentAnimations.xaml") };
+        private static ResourceDictionary baseCardAnimationResources = new ResourceDictionary() { Source = new Uri("pack://application:,,,/Animations;component/BaseCardAnimations.xaml") };
 
         public void NotifySkillUse(ActionLog log)
         {
-            Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
+            if (ViewModelBase.IsDetached) return;
+            Trace.Assert(log.Source != null);
+            PlayerViewBase player = playersMap[log.Source];
+            bool soundPlayed = false;
+            if (log.SkillAction != null)
             {
-                Trace.Assert(log.Source != null);
-                PlayerViewBase player = playersMap[log.Source];
-                bool soundPlayed = false;
-                if (log.SkillAction != null)
+                string key1 = string.Format("{0}.Animation", log.SkillAction.GetType().Name);
+                string key2 = key1 + ".Offset";
+                bool animPlayed = false;
+                lock (equipAnimationResources)
                 {
-                    string key1 = string.Format("{0}.Animation", log.SkillAction.GetType().Name);
-                    string key2 = key1 + ".Offset";
-                    bool animPlayed = false;
-                    lock (equipAnimationResources)
+                    if (equipAnimationResources.Contains(key1))
                     {
-                        if (equipAnimationResources.Contains(key1))
+                        AnimationBase animation = null;
+                        Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
                         {
-                            AnimationBase animation = equipAnimationResources[key1] as AnimationBase;
-                            if (animation != null && animation.Parent == null)
+                            animation = equipAnimationResources[key1] as AnimationBase;
+                        });
+                        if (animation != null && animation.Parent == null)
+                        {
+                            Point offset = new Point(0, 0);
+                            if (equipAnimationResources.Contains(key2))
                             {
-                                Point offset = new Point(0, 0);
-                                if (equipAnimationResources.Contains(key2))
-                                {
-                                    offset = (Point)equipAnimationResources[key2];
-                                }
-                                player.PlayAnimation(animation, 0, offset);
-                                animPlayed = true;
+                                offset = (Point)equipAnimationResources[key2];
                             }
+                            player.PlayAnimationAsync(animation, 0, offset);
+                            animPlayed = true;
                         }
                     }
-                    if (log.SkillAction.IsSingleUse || log.SkillAction.IsAwakening)
+                }
+                if (log.SkillAction.IsSingleUse || log.SkillAction.IsAwakening)
+                {
+                    if (log.SkillAction.IsAwakening) log.Source[Player.Awakened]++;
+                    Application.Current.Dispatcher.BeginInvoke((ThreadStart)delegate()
                     {
-                        if (log.SkillAction.IsAwakening) log.Source[Player.Awakened]++;
                         ExcitingSkillAnimation anim = new ExcitingSkillAnimation();
                         anim.SkillName = log.SkillAction.GetType().Name;
-                        anim.HeroName = log.Source.Hero.Name;
+                        anim.HeroName = log.SkillAction.HeroTag.Name;
                         gridRoot.Children.Add(anim);
                         anim.HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch;
                         anim.VerticalAlignment = System.Windows.VerticalAlignment.Stretch;
                         anim.Start();
+                    });
+                    animPlayed = true;
+                }
+                if (!animPlayed && player != mainPlayerPanel)
+                {
+                    string s = LogFormatter.Translate(log.SkillAction);
+                    if (s != string.Empty)
+                    {
+                        ZoomTextAnimation anim = null;
+                        Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
+                        {
+                            anim = new ZoomTextAnimation() { Text = s };
+                        });
+                        Trace.Assert(anim != null);
+                        player.PlayAnimationAsync(anim, 1, new Point(0, 0));
                         animPlayed = true;
                     }
-                    if (!animPlayed && player != mainPlayerPanel)
-                    {
-                        string s = LogFormatter.Translate(log.SkillAction);
-                        if (s != string.Empty)
-                        {
-
-                            ZoomTextAnimation anim = new ZoomTextAnimation() { Text = s };
-                            player.PlayAnimation(anim, 1, new Point(0, 0));
-                            animPlayed = true;
-                        }
-                    }
-                    string soundKey = log.SkillAction.GetType().Name;
-                    Uri uri = GameSoundLocator.GetSkillSound(soundKey, log.SpecialEffectHint);
-                    GameSoundPlayer.PlaySoundEffect(uri);
-                    soundPlayed = uri != null;
                 }
-                else if (log.GameAction == GameAction.None)
+                string soundKey = log.SkillAction.GetType().Name;
+                Uri uri = GameSoundLocator.GetSkillSound(soundKey, log.SpecialEffectHint);
+                GameSoundPlayer.PlaySoundEffect(uri);
+                soundPlayed = uri != null;
+            }
+            else if (log.GameAction == GameAction.None)
+            {
+                bool? isMale = null;
+                if (log.Source != null) isMale = !log.Source.IsFemale;
+                Uri cardSoundUri = GameSoundLocator.GetCardSound(log.CardAction.Type.CardType, isMale);
+                GameSoundPlayer.PlaySoundEffect(cardSoundUri);
+                soundPlayed = cardSoundUri != null;
+            }
+            if (log.CardAction != null && log.GameAction != GameAction.None)
+            {
+                if (log.CardAction.Type is TieSuoLianHuan)
                 {
-                    bool? isMale = null;
-                    if (log.Source != null) isMale = !log.Source.IsFemale;
-                    Uri cardSoundUri = GameSoundLocator.GetCardSound(log.CardAction.Type.CardType, isMale);
-                    GameSoundPlayer.PlaySoundEffect(cardSoundUri);
-                    soundPlayed = cardSoundUri != null;
-                }
-                if (log.CardAction != null && log.GameAction != GameAction.None)
-                {
-                    if (log.CardAction.Type is Shan)
+                    foreach (var p in log.Targets)
                     {
-                        player.PlayAnimation(new ShanAnimation(), 0, new Point(0, 0));
-                    }
-                    else if (log.CardAction.Type is RegularSha)
-                    {
-                        AnimationBase sha;
-                        if (log.CardAction.SuitColor == SuitColorType.Red)
-                        {
-                            sha = new ShaAnimation();
-                        }
-                        else
-                        {
-                            sha = new ShaAnimation2();
-                        }
-                        player.PlayAnimation(sha, 0, new Point(0, 0));
-                    }
-                    else if (log.CardAction.Type is TieSuoLianHuan)
-                    {
-                        foreach (var p in log.Targets)
+                        Application.Current.Dispatcher.BeginInvoke((ThreadStart)delegate()
                         {
                             playersMap[p].PlayIronShackleAnimation();
-                        }
-                    }
-
-                    bool? isMale = null;
-                    if (log.Source != null) isMale = !log.Source.IsFemale;
-                    Uri cardSoundUri = GameSoundLocator.GetCardSound(log.CardAction.Type.CardType, isMale);
-                    var card = log.CardAction as Card;
-                    if (card != null)
-                    {
-                        bool play = true;
-                        if (card.Log != null && card.Log.SkillAction is IEquipmentSkill)
-                        {
-                            Uri uri = GameSoundLocator.GetSkillSound(card.Log.SkillAction.GetType().Name);
-                            if (uri != null) play = false;
-                        }
-                        if (play && !soundPlayed) GameSoundPlayer.PlaySoundEffect(cardSoundUri);
+                        });
                     }
                 }
-
-                if (log.GameAction != GameAction.None || log.SkillAction != null && log.CardAction == null || log.UseIndexLine)
+                else
                 {
-                    if (log.Targets.Count > 0)
+                    ICard c = log.CardAction;
+                    string key1;
+                    key1 = string.Format("{0}.{1}.Animation", c.Type.GetType().Name, c.SuitColor == SuitColorType.Red ? "Red" : "Black");
+                    if (!baseCardAnimationResources.Contains(key1))
                     {
-                        _LineUp(log.Source, log.Targets);
-                        foreach (var target in log.Targets)
-                        {
-                            target.IsTargeted = true;
-                        }
+                        key1 = string.Format("{0}.Animation", c.Type.GetType().Name);
                     }
-
-                    if (log.Targets.Count == 1 && log.SecondaryTargets != null && log.SecondaryTargets.Count > 0)
+                    string key2 = key1 + ".Offset";
+                    lock (baseCardAnimationResources)
                     {
-                        _LineUp(log.Targets[0], log.SecondaryTargets);
-                        foreach (var target in log.SecondaryTargets)
+                        if (baseCardAnimationResources.Contains(key1))
                         {
-                            target.IsTargeted = true;
+                            AnimationBase animation = null;
+                            Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
+                            {
+                                animation = baseCardAnimationResources[key1] as AnimationBase;
+                            });
+                            if (animation != null && animation.Parent == null)
+                            {
+                                Point offset = new Point(0, 0);
+                                if (baseCardAnimationResources.Contains(key2))
+                                {
+                                    offset = (Point)baseCardAnimationResources[key2];
+                                }
+                                player.PlayAnimationAsync(animation, 0, offset);
+                            }
                         }
                     }
                 }
-                gameLogs.AppendLog(log);
-                rtbLog.ScrollToEnd();
 
-                _AppendKeyEventLog(log);
+                bool? isMale = null;
+                if (log.Source != null) isMale = !log.Source.IsFemale;
+                Uri cardSoundUri = GameSoundLocator.GetCardSound(log.CardAction.Type.CardType, isMale);
+                var card = log.CardAction as Card;
+                if (card != null)
+                {
+                    bool play = true;
+                    if (card.Log != null && card.Log.SkillAction is IEquipmentSkill)
+                    {
+                        Uri uri = GameSoundLocator.GetSkillSound(card.Log.SkillAction.GetType().Name);
+                        if (uri != null) play = false;
+                    }
+                    if (play && !soundPlayed) GameSoundPlayer.PlaySoundEffect(cardSoundUri);
+                }
+            }
+
+            if (log.GameAction != GameAction.None || log.SkillAction != null && log.CardAction == null || log.ShowCueLine)
+            {
+                if (log.Targets.Count > 0)
+                {
+                    _LineUp(log.Source, log.Targets);
+                    foreach (var target in log.Targets)
+                    {
+                        target.IsTargeted = true;
+                    }
+                }
+
+                if (log.Targets.Count == 1 && log.SecondaryTargets != null && log.SecondaryTargets.Count > 0)
+                {
+                    _LineUp(log.Targets[0], log.SecondaryTargets);
+                    foreach (var target in log.SecondaryTargets)
+                    {
+                        target.IsTargeted = true;
+                    }
+                }
+            }
+
+            if (!log.SkillSoundOnly)
+            {
+                Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
+                {
+                    gameLogs.AppendLog(log);
+                    rtbLog.ScrollToEnd();
+                });
+
+                Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
+                {
+                    _AppendKeyEventLog(log);
+                });
+            }
+        }
+
+        public void NotifyUiAttached()
+        {
+            Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
+            {
+                ViewModelBase.AttachAll();
+                foreach (var player in playersMap.Values)
+                {
+                    player.UpdateCards();
+                }
+                busyIndicator.IsBusy = false;
+                var handler = OnUiAttached;
+                if (handler != null)
+                {
+                    handler(this, new EventArgs());
+                }
             });
         }
 
-        public void NotifyLogEvent(Prompt prompt)
+        public void NotifyUiDetached()
         {
+            Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
+            {
+                busyIndicator.BusyContent = Resources["Busy.Reconnecting"];
+                busyIndicator.IsBusy = true;
+            });
+            ViewModelBase.DetachAll();
         }
 
         private ChildWindow _showHandCardsWindow;
 
         public void NotifyShowCardsStart(Player p, List<Card> cards)
         {
+            if (ViewModelBase.IsDetached) return;
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
                 if (_showHandCardsWindow != null)
@@ -967,6 +1177,7 @@ namespace Sanguosha.UI.Controls
 
         public void NotifyShowCardsEnd()
         {
+            if (ViewModelBase.IsDetached) return;
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
                 if (_showHandCardsWindow == null) return;
@@ -975,23 +1186,9 @@ namespace Sanguosha.UI.Controls
             });
         }
 
-        private void _AppendKeyEventLog(Paragraph log)
-        {
-            var doc = new FlowDocument();
-            var para = log;
-            if (para.Inlines.Count == 0) return;
-            doc.Blocks.Add(para);
-            keyEventLog.AddLog(doc);
-        }
-
-        private void _AppendKeyEventLog(ActionLog log)
-        {
-            _AppendKeyEventLog(LogFormatter.RichTranslateKeyLog(log));
-        }
-
-
         public void NotifyMultipleChoiceResult(Player p, OptionPrompt answer)
         {
+            if (ViewModelBase.IsDetached) return;
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
                 gameLogs.AppendMultipleChoiceLog(p, PromptFormatter.Format(answer));
@@ -1000,6 +1197,7 @@ namespace Sanguosha.UI.Controls
 
         public void NotifyDeath(Player p, Player by)
         {
+            if (ViewModelBase.IsDetached) return;
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
                 var uri = GameSoundLocator.GetDeathSound(p.Hero.Name);
@@ -1010,6 +1208,7 @@ namespace Sanguosha.UI.Controls
 
         public void NotifyActionComplete()
         {
+            if (ViewModelBase.IsDetached) return;
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
                 foreach (var player in GameModel.PlayerModels)
@@ -1022,6 +1221,7 @@ namespace Sanguosha.UI.Controls
 
         public void NotifyLoseHealth(Player player, int delta)
         {
+            if (ViewModelBase.IsDetached) return;
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
                 gameLogs.AppendLoseHealthLog(player, delta);
@@ -1033,6 +1233,7 @@ namespace Sanguosha.UI.Controls
 
         public void NotifyRecoverHealth(Player player, int delta)
         {
+            if (ViewModelBase.IsDetached) return;
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
                 gameLogs.AppendRecoverHealthLog(player, delta);
@@ -1042,8 +1243,32 @@ namespace Sanguosha.UI.Controls
             });
         }
 
+        public void NotifyReforge(Player p, ICard card)
+        {
+            if (ViewModelBase.IsDetached) return;
+            Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
+            {
+                Uri uri = GameSoundLocator.GetSystemSound("Reforge");
+                GameSoundPlayer.PlaySoundEffect(uri);
+                gameLogs.AppendReforgeLog(p, card);
+                rtbLog.ScrollToEnd();
+            });
+        }
+
+        public void NotifyLogEvent(Prompt custom, List<Player> players = null, bool isKeyEvent = true, bool useUICard = true)
+        {
+            if (ViewModelBase.IsDetached) return;
+            Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
+            {
+                gameLogs.AppendLogEvent(players == null ? Game.CurrentGame.Players : players, custom, useUICard);
+                rtbLog.ScrollToEnd();
+                if (isKeyEvent) _AppendKeyEventLog(custom, useUICard);
+            });
+        }
+
         public void NotifyShowCard(Player p, Card card)
         {
+            if (ViewModelBase.IsDetached) return;
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
                 if (p == null)
@@ -1067,6 +1292,7 @@ namespace Sanguosha.UI.Controls
 
         public void NotifyCardChoiceCallback(CardRearrangement arrange)
         {
+            if (ViewModelBase.IsDetached) return;
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
                 if (cardChoiceWindow == null) return;
@@ -1076,35 +1302,41 @@ namespace Sanguosha.UI.Controls
             });
         }
 
-        public void NotifyImpersonation(Player p, Core.Heroes.Hero h, ISkill s)
+        public void NotifyImpersonation(Player p, Hero impersonator, Hero impersonatedHero, ISkill acquiredSkill)
         {
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
-                var model = playersMap[p].PlayerModel;
-                if (h == null)
+                var view = playersMap[p];
+                var model = view.PlayerModel.GetHeroModel(impersonator);
+                Trace.Assert(model != null);
+                if (impersonatedHero == null)
                 {
                     model.ImpersonatedHeroName = string.Empty;
                     model.ImpersonatedSkill = string.Empty;
                 }
                 else
                 {
-                    model.ImpersonatedHeroName = h.Name;
-                    model.ImpersonatedSkill = s.GetType().Name;
+                    model.ImpersonatedHeroName = impersonatedHero.Name;
+                    model.ImpersonatedSkill = acquiredSkill.GetType().Name;
                 }
+                view.UpdateImpersonateStatus(model == view.PlayerModel.Hero1Model);
             });
         }
 
         public void NotifyGameStart()
         {
+            if (ViewModelBase.IsDetached) return;
+            GameSoundPlayer.PlaySoundEffect(GameSoundLocator.GetSystemSound("GameStart"));
+
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
-                GameSoundPlayer.PlaySoundEffect(GameSoundLocator.GetSystemSound("GameStart"));
                 PlayAnimation(new GameStartAnimation());
             });
         }
 
         public void NotifyJudge(Player p, Card card, ActionLog log, bool? isSuccess, bool isFinalResult)
         {
+            if (ViewModelBase.IsDetached) return;
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
                 CardView cardView = discardDeck.Cards.FirstOrDefault(c => c.Card.Id == card.Id);
@@ -1129,6 +1361,7 @@ namespace Sanguosha.UI.Controls
 
         public void NotifyWuGuStart(Prompt prompt, DeckPlace place)
         {
+            if (ViewModelBase.IsDetached) return;
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
                 GameModel.WuGuModel = new WuGuChoiceViewModel();
@@ -1153,11 +1386,13 @@ namespace Sanguosha.UI.Controls
 
         void card_OnSelectedChanged(object sender, EventArgs e)
         {
+            if (ViewModelBase.IsDetached) return;
             GameModel.CurrentActivePlayer.AnswerWuGuChoice((sender as CardViewModel).Card);
         }
 
         public void NotifyWuGuEnd()
         {
+            if (ViewModelBase.IsDetached) return;
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
                 wuGuWindow.Close();
@@ -1168,6 +1403,7 @@ namespace Sanguosha.UI.Controls
 
         public void NotifyPinDianStart(Player from, Player to, ISkill reason)
         {
+            if (ViewModelBase.IsDetached) return;
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
                 pinDianWindow.Caption = PromptFormatter.Format(new Prompt("Window.PinDian.Prompt", reason));
@@ -1178,6 +1414,7 @@ namespace Sanguosha.UI.Controls
 
         public void NotifyMultipleCardUsageResponded(Player player)
         {
+            if (ViewModelBase.IsDetached) return;
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
                 pinDianBox.OnPinDianCardPlayed(player);
@@ -1186,11 +1423,15 @@ namespace Sanguosha.UI.Controls
 
         public void NotifyPinDianEnd(Card c1, Card c2)
         {
+            if (ViewModelBase.IsDetached) return;
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
                 pinDianBox.RevealResult(c1, c2);
             });
         }
+
+        private EventHandler _showGameResultWindowHandler;
+        private EventHandler _closeGameResultWindowHandler;
 
         public void NotifyGameOver(bool isDraw, List<Player> winners)
         {
@@ -1224,7 +1465,6 @@ namespace Sanguosha.UI.Controls
                 else delayWindow = false;
                 LobbyViewModel.Instance.OnChat -= chatEventHandler;
 
-
                 ObservableCollection<GameResultViewModel> model = new ObservableCollection<GameResultViewModel>();
                 foreach (Player player in winners.Concat(losers).Concat(drawers))
                 {
@@ -1233,45 +1473,51 @@ namespace Sanguosha.UI.Controls
                     if (winners.Contains(player))
                     {
                         m.Result = GameResult.Win;
-                        // @todo : fix this.
-                        m.GainedExperience = "+15";
+                        // @todo : need to refactor this to sync it with Game.cs
+                        if (player.Role == Role.Defector)
+                            m.GainedExperience = "+55";
+                        else
+                            m.GainedExperience = "+5";
                         m.GainedTechPoints = "+0";
                     }
                     else if (losers.Contains(player))
                     {
-                        m.Result = GameResult.Lose;
-                        // @todo : fix this.
-                        m.GainedExperience = "-3";
+                        m.Result = GameResult.Lose;                        
+                        m.GainedExperience = "-1";
                         m.GainedTechPoints = "+0";
                     }
                     else if (drawers.Contains(player))
                     {
-                        m.Result = GameResult.Draw;
-                        // @todo : fix this.
-                        m.GainedExperience = "+3";
+                        m.Result = GameResult.Draw;                        
+                        m.GainedExperience = "+0";
                         m.GainedTechPoints = "+0";
                     }
                     model.Add(m);
                 }
                 gameResultBox.DataContext = model;
-                gameResultWindow.Content = gameResultBox;
-                gameResultWindow.Closed += (o, e) =>
+
+                _closeGameResultWindowHandler = (o, e) =>
                 {
                     var handler = OnGameCompleted;
                     if (handler != null)
                     {
                         handler(this, new EventArgs());
                     }
+                    gameResultWindow.Closed -= _closeGameResultWindowHandler;
                 };
+                gameResultWindow.Closed += _closeGameResultWindowHandler;
 
                 if (delayWindow)
                 {
                     DispatcherTimer timer = new DispatcherTimer();
-                    timer.Tick += (o, e) =>
+                    _showGameResultWindowHandler = (o, e) =>
                     {
                         gameResultWindow.Show();
                         timer.Stop();
+                        timer.Tick -= _showGameResultWindowHandler;
                     };
+
+                    timer.Tick += _showGameResultWindowHandler;
                     timer.Interval = TimeSpan.FromSeconds(2);
                     timer.Start();
                 }
@@ -1280,6 +1526,11 @@ namespace Sanguosha.UI.Controls
                     gameResultWindow.Show();
                 }
             });
+        }
+		
+        private void btnCloseResultBox_Click(object sender, System.Windows.RoutedEventArgs e)
+        {
+            gameResultWindow.Close();
         }
         #endregion
 
@@ -1299,15 +1550,5 @@ namespace Sanguosha.UI.Controls
         }
         #endregion
 
-
-        public void NotifyUiAttached()
-        {
-            // throw new NotImplementedException();
-        }
-
-        public void NotifyUiDetached()
-        {
-            // throw new NotImplementedException();
-        }
     }
 }

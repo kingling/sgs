@@ -9,6 +9,7 @@ using Sanguosha.Core.UI;
 using Sanguosha.Core.Games;
 using System.Diagnostics;
 using Sanguosha.Core.Players;
+using Sanguosha.Core.Heroes;
 
 namespace Sanguosha.Core.Skills
 {
@@ -17,7 +18,6 @@ namespace Sanguosha.Core.Skills
         public PassiveSkill()
         {
             isAutoInvoked = false;
-            ExtraCardsDeck = null;
             Helper = new UiHelper();
         }
 
@@ -49,14 +49,15 @@ namespace Sanguosha.Core.Skills
 
         protected abstract void UninstallTriggers(Players.Player owner);
 
-        public DeckType ExtraCardsDeck { get; protected set; }
         public bool IsRulerOnly { get; protected set; }
         public bool IsSingleUse { get; protected set; }
         public bool IsAwakening { get; protected set; }
         public bool IsEnforced { get; protected set; }
 
+        public Hero HeroTag { get; set; }
+
         bool? isAutoInvoked;
-        public virtual bool? IsAutoInvoked 
+        public bool? IsAutoInvoked 
         {
             get
             {

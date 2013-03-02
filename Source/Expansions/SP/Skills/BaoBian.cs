@@ -12,6 +12,8 @@ using Sanguosha.Core.Players;
 using Sanguosha.Expansions.Hills.Skills;
 using Sanguosha.Expansions.Basic.Skills;
 using Sanguosha.Expansions.Wind.Skills;
+using Sanguosha.Expansions.Basic.Cards;
+using Sanguosha.Core.Exceptions;
 
 namespace Sanguosha.Expansions.SP.Skills
 {
@@ -20,6 +22,60 @@ namespace Sanguosha.Expansions.SP.Skills
     /// </summary>
     public class BaoBian : TriggerSkill
     {
+        PaoXiao bbPaoXiao;
+        ShenSu bbShenSu;
+        TiaoXin bbTiaoXin;
+        void Refresh(Player p)
+        {
+            if (p.Health <= 3)
+            {
+                if (bbTiaoXin == null)
+                {
+                    bbTiaoXin = new TiaoXin();
+                    Game.CurrentGame.PlayerAcquireAdditionalSkill(p, bbTiaoXin, HeroTag);
+                }
+            }
+            else
+            {
+                if (bbTiaoXin != null)
+                {
+                    Game.CurrentGame.PlayerLoseAdditionalSkill(p, bbTiaoXin);
+                    bbTiaoXin = null;
+                }
+            }
+            if (p.Health <= 2)
+            {
+                if (bbPaoXiao == null)
+                {
+                    bbPaoXiao = new PaoXiao();
+                    Game.CurrentGame.PlayerAcquireAdditionalSkill(p, bbPaoXiao, HeroTag);
+                }
+            }
+            else
+            {
+                if (bbPaoXiao != null)
+                {
+                    Game.CurrentGame.PlayerLoseAdditionalSkill(p, bbPaoXiao);
+                    bbPaoXiao = null;
+                }
+            }
+            if (p.Health == 1)
+            {
+                if (bbShenSu == null)
+                {
+                    bbShenSu = new ShenSu();
+                    Game.CurrentGame.PlayerAcquireAdditionalSkill(p, bbShenSu, HeroTag);
+                }
+            }
+            else
+            {
+                if (bbShenSu != null)
+                {
+                    Game.CurrentGame.PlayerLoseAdditionalSkill(p, bbShenSu);
+                    bbShenSu = null;
+                }
+            }
+        }
         public override Player Owner
         {
             get
@@ -28,74 +84,38 @@ namespace Sanguosha.Expansions.SP.Skills
             }
             set
             {
-                Player original = base.Owner;
+                if (Owner == value) return;
+                if (Owner != null)
+                {
+                    Game.CurrentGame.PlayerLoseAdditionalSkill(Owner, bbPaoXiao);
+                    Game.CurrentGame.PlayerLoseAdditionalSkill(Owner, bbShenSu);
+                    Game.CurrentGame.PlayerLoseAdditionalSkill(Owner, bbTiaoXin);
+                    bbPaoXiao = null;
+                    bbShenSu = null;
+                    bbTiaoXin = null;
+                }
                 base.Owner = value;
-                if (base.Owner == null && original != null)
-                {
-                    foreach (var skill in skills.Values)
-                    {
-                        Game.CurrentGame.PlayerLoseSkill(original, skill);
-                    }
-                }
+                if (Owner != null && Owner.MaxHealth > 0) Refresh(Owner);
             }
         }
-
-        void Run(Player Owner, GameEvent gameEvent, GameEventArgs eventArgs)
-        {
-            bool getSkills = false;
-            foreach (int health in skills.Keys)
-            {
-                if (Owner.Health <= health && !Owner.AdditionalSkills.Contains(skills[health]))
-                {
-                    getSkills = true;
-                    Game.CurrentGame.PlayerAcquireSkill(Owner, skills[health]);
-                }
-                if (Owner.Health > health) Game.CurrentGame.PlayerLoseSkill(Owner, skills[health]);
-            }
-            if (Owner.Health < 1) Game.CurrentGame.PlayerLoseSkill(Owner, bbShenSu);
-            if (getSkills) NotifySkillUse();
-        }
-
         public BaoBian()
         {
-            bbTiaoXin = new TiaoXin();
-            bbPaoXiao = new PaoXiao();
-            bbShenSu = new ShenSu();
-            skills = new Dictionary<int, ISkill>();
-            skills[3] = bbTiaoXin;
-            skills[2] = bbPaoXiao;
-            skills[1] = bbShenSu;
+            bbPaoXiao = null;
+            bbShenSu = null;
+            bbTiaoXin = null;
             var trigger = new AutoNotifyPassiveSkillTrigger(
                 this,
-                (p, e, a) =>
-                {
-                    if (e == GameEvent.AfterHealthChanged) return a.Targets.Contains(p);
-                    return a.Source == p;
-                },
-                Run,
-                TriggerCondition.Global
-            ) { IsAutoNotify = false, Priority = SkillPriority.BaoBian };
+                    (p, e, a) => { Refresh(p); },
+                    TriggerCondition.OwnerIsTarget
+                ) { IsAutoNotify = false };
             Triggers.Add(GameEvent.AfterHealthChanged, trigger);
-            Triggers.Add(GameEvent.PlayerGameStartAction, trigger);
-
+            IsEnforced = true;
             var trigger2 = new AutoNotifyPassiveSkillTrigger(
                 this,
-                (p, e, a) =>
-                {
-                    var arg = a as SkillSetChangedEventArgs;
-                    return !arg.IsLosingSkill && arg.Skills.Contains(this);
-                },
-                Run,
-                TriggerCondition.OwnerIsSource
-            ) { IsAutoNotify = false };
-            Triggers.Add(GameEvent.PlayerSkillSetChanged, trigger2);
-
-            IsEnforced = true;
-        }
-
-        Dictionary<int, ISkill> skills;
-        ISkill bbTiaoXin;
-        ISkill bbPaoXiao;
-        ISkill bbShenSu;
+                    (p, e, a) => { Refresh(p); },
+                    TriggerCondition.OwnerIsSource
+                ) { IsAutoNotify = false };
+            Triggers.Add(GameEvent.PlayerGameStartAction, trigger2);
+         }
     }
 }

@@ -25,10 +25,12 @@ namespace Sanguosha.UI.Controls
     /// </summary>
     public partial class CardView : UserControl
     {
+        private static int CardViewPoolSize = 50;
+
         static CardView()
         {
             _cardViewPool = new Stack<CardView>();
-            for (int i = 0; i < 30; i++)
+            for (int i = 0; i < CardViewPoolSize; i++)
             {
                 _cardViewPool.Push(new CardView());
             }
@@ -45,9 +47,10 @@ namespace Sanguosha.UI.Controls
             this.MouseLeftButtonUp += CardView_MouseLeftButtonUp;
             this.MouseEnter += CardView_MouseEnter;
             this.MouseLeave += CardView_MouseLeave;
+            _OnCardPropertyChangedHandler = new PropertyChangedEventHandler(_OnCardPropertyChanged);
             _OnCardSelectedChangedHandler = new EventHandler(_OnCardSelectedChanged);
             OffsetOnSelect = true;
-
+            Unloaded += CardView_Unloaded;
             Storyboard disappear = Resources["sbDisappear"] as Storyboard;
             disappear.Completed += new EventHandler((o, e2) =>
             {
@@ -67,9 +70,22 @@ namespace Sanguosha.UI.Controls
                 if (_doDestroy)
                 {
                     Trace.Assert(!_cardViewPool.Contains(this));
-                    _cardViewPool.Push(this);
+                    if (_cardViewPool.Count < CardViewPoolSize)
+                    {
+                        _cardViewPool.Push(this);
+                    }
                 }
             });
+        }
+
+        void CardView_Unloaded(object sender, RoutedEventArgs e)
+        {
+            var oldModel = CardModel;
+            if (oldModel != null)
+            {
+                oldModel.OnSelectedChanged -= _OnCardSelectedChangedHandler;
+                oldModel.PropertyChanged -= _OnCardPropertyChangedHandler;
+            }
         }
 
         public CardView(CardViewModel card) : this()
@@ -105,6 +121,70 @@ namespace Sanguosha.UI.Controls
             }
         }
 
+        void _Repaint()
+        {
+            var card = CardModel;
+            if (card == null)
+            {
+                tbHint.Text = string.Empty;
+                imgCardType.Visibility = Visibility.Collapsed;
+                imgSuit.Visibility = Visibility.Collapsed;
+                imgRankString.Visibility = Visibility.Collapsed;
+                return;
+            }
+            else if (card is CardSlotViewModel)
+            {
+                tbHint.Text = (card as CardSlotViewModel).Hint;
+                imgCardType.Visibility = Visibility.Collapsed;
+                imgSuit.Visibility = Visibility.Collapsed;
+                imgRankString.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                tbTypeString.Text = CardModel.TypeString;
+                string key = string.Format("Card.{0}.Image.Normal", card.TypeString);
+
+                if (Resources.Contains(key))
+                {
+                    imgCardType.Source = Resources[key] as ImageSource;
+                }
+                else
+                {
+                    imgCardType.Source = null;
+                }
+
+                if (card.Suit != SuitType.None)
+                {
+                    imgSuit.Source = Resources[string.Format("Card.Suit.{0}.Image.Normal", card.Suit)] as ImageSource;
+                }
+                else
+                {
+                    imgSuit.Source = null;
+                }
+
+                if (card.Card.Rank > 0 && card.Card.Rank <= 13)
+                {
+                    imgRankString.Source = Resources[string.Format("Card.Rank.{0}.{1}.Image.Normal", card.SuitColor, card.RankString)] as ImageSource;                    
+                }
+                else
+                {
+                    imgRankString.Source = null;
+                }
+                imgCardType.Visibility = Visibility.Visible;
+                imgSuit.Visibility = Visibility.Visible;
+                imgRankString.Visibility = Visibility.Visible;
+            }
+            fadeMask.BeginAnimation(Border.OpacityProperty, null);
+            if (card.IsFaded)
+            {
+                fadeMask.Opacity = 1d;
+            }
+            else
+            {
+                fadeMask.Opacity = 0d;
+            }
+        }
+
         void CardView_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
         {
             toolTip.Content = DataContext;
@@ -113,18 +193,38 @@ namespace Sanguosha.UI.Controls
             if (oldModel != null)
             {
                 oldModel.OnSelectedChanged -= _OnCardSelectedChangedHandler;
+                oldModel.PropertyChanged -= _OnCardPropertyChangedHandler;
             }
 
             CardViewModel model = DataContext as CardViewModel;
             if (model != null)
             {
                 model.OnSelectedChanged += _OnCardSelectedChangedHandler;
+                model.PropertyChanged += _OnCardPropertyChangedHandler;
             }
+            _Repaint();
         }
 
         public bool OffsetOnSelect { get; set; }
 
         private EventHandler _OnCardSelectedChangedHandler;
+        private PropertyChangedEventHandler _OnCardPropertyChangedHandler;
+
+        private void _OnCardPropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (CardModel == null) return;
+            if (e.PropertyName == "IsFaded")
+            {
+                if (CardModel.IsFaded)
+                {
+                    (Resources["sbFade"] as Storyboard).Begin();
+                }
+                else
+                {
+                    (Resources["sbUnfade"] as Storyboard).Begin();
+                }
+            }
+        }
 
         private void _OnCardSelectedChanged(object sender, EventArgs args)
         {
@@ -406,6 +506,11 @@ namespace Sanguosha.UI.Controls
 
         public static CardView CreateCard(Card card, Panel parent = null, int width = 93, int height = 130)
         {
+            return CreateCard(new CardViewModel() { Card = card }, parent, width, height);
+        }
+
+        public static CardView CreateCard(CardViewModel card, Panel parent = null, int width = 93, int height = 130)
+        {
             if (_cardViewPool.Count == 0) _cardViewPool.Push(new CardView());
 
             var cardView = _cardViewPool.Pop();
@@ -414,8 +519,8 @@ namespace Sanguosha.UI.Controls
             cardView.Height = height;
             cardView.Opacity = 0d;
             cardView.Visibility = Visibility.Visible;
-            cardView.DataContext = new CardViewModel() { Card = card };            
-            cardView.IsHitTestVisible = true;            
+            cardView.DataContext = card;
+            cardView.IsHitTestVisible = true;
             Trace.Assert(cardView.Parent == null);
 
             if (parent != null)
@@ -423,6 +528,16 @@ namespace Sanguosha.UI.Controls
                 parent.Children.Add(cardView);
             }
             return cardView;
+        }
+
+        public static IList<CardView> CreateCards(IList<CardViewModel> cards, Panel parent = null)
+        {
+            List<CardView> cardViews = new List<CardView>();
+            foreach (var card in cards)
+            {
+                cardViews.Add(CreateCard(card, parent));
+            }
+            return cardViews;
         }
 
         public static IList<CardView> CreateCards(IList<Card> cards, Panel parent = null)
@@ -433,6 +548,11 @@ namespace Sanguosha.UI.Controls
                 cardViews.Add(CreateCard(card, parent));
             }
             return cardViews;
+        }
+
+        public static void ClearCache()
+        {
+            _cardViewPool.Clear();
         }
         #endregion
 
@@ -453,5 +573,14 @@ namespace Sanguosha.UI.Controls
             animation.Start();
         }
         #endregion
+
+        public void Update()
+        {
+            if (CardModel != null)
+            {
+                CardModel.Update();
+            }
+            _Repaint();
+        }
     }
 }

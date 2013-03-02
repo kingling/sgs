@@ -29,7 +29,16 @@ namespace Sanguosha.UI.Controls
         {
             InitializeComponent();
             this.DataContextChanged += new DependencyPropertyChangedEventHandler(PlayerInfoView_DataContextChanged);
-            _OnPropertyChanged = new PropertyChangedEventHandler(model_PropertyChanged);            
+            _OnPropertyChanged = new PropertyChangedEventHandler(model_PropertyChanged);
+            Unloaded += PlayerView_Unloaded;
+        }
+
+        void PlayerView_Unloaded(object sender, RoutedEventArgs e)
+        {
+            grid.Effect = null;
+            heroPhoto.Effect = null;
+            heroPhoto2.Effect = null;
+            this.DataContext = null;
         }
 
         public static void PlayerView_FlowDirectionChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -56,7 +65,7 @@ namespace Sanguosha.UI.Controls
                 model.PropertyChanged += _OnPropertyChanged;
                 cbRoleBox.DataContext = model.PossibleRoles;
             }
-        }       
+        }
 
         void model_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
@@ -102,25 +111,57 @@ namespace Sanguosha.UI.Controls
                 Uri uri = GameSoundLocator.GetSystemSound("IronShackled");
                 GameSoundPlayer.PlaySoundEffect(uri);
             }
-            else if (e.PropertyName == "ImpersonatedHeroName")
+        }
+
+        public override void UpdateImpersonateStatus(bool isPrimaryHero)
+        {
+            Sanguosha.UI.Resources.FileNameToImageSourceConverter converter = new UI.Resources.FileNameToImageSourceConverter();
+
+            var hero = isPrimaryHero ? PlayerModel.Hero1Model : PlayerModel.Hero2Model;
+
+            Trace.Assert(hero != null);
+
+            Storyboard sb;
+            if (PlayerModel.Hero2 == null)
             {
-                Sanguosha.UI.Resources.FileNameToImageSourceConverter converter = new UI.Resources.FileNameToImageSourceConverter();
-                
+                sb = (Resources["sbStartImpersonate"] as Storyboard);
+            }
+            else if (isPrimaryHero)
+            {
+                sb = (Resources["sbStartImpersonate1"] as Storyboard);
+            }
+            else
+            {
+                sb = (Resources["sbStartImpersonate2"] as Storyboard);
+            }
+            if (!string.IsNullOrEmpty(hero.ImpersonatedHeroName))
+            {
                 converter.StringFormat = "Resources/Images/Heroes/Full/{0}.png";
                 converter.ResourceKeyFormat = "Hero.{0}.Image";
-                converter.CropRect = new Int32Rect(28,46,220,132);
-                ImageSource source = converter.Convert(new object[]{ this, model.ImpersonatedHeroName }, typeof(ImageSource), null, null) as ImageSource;
-                impersonateEffect.Texture2 = new ImageBrush(source);
-
-                Storyboard sb = (Resources["sbStartImpersonate"] as Storyboard);
-                if (!string.IsNullOrEmpty(model.ImpersonatedHeroName))
+                Effects.RippleTransitionEffect effect;
+                if (PlayerModel.Hero2 == null)
                 {
-                    sb.Begin();
+                    converter.CropRect = new Int32Rect(28, 46, 220, 132);
+                    effect = impersonateEffect;
+                }
+                else if (isPrimaryHero)
+                {
+                    converter.CropRect = new Int32Rect(60, 30, 208, 125);
+                    effect = impersonateEffect1;
                 }
                 else
                 {
-                    sb.Stop();
+                    converter.CropRect = new Int32Rect(63, 20, 126, 178);
+                    effect = impersonateEffect2;
                 }
+
+                ImageSource source = converter.Convert(new object[] { this, hero.ImpersonatedHeroName }, typeof(ImageSource), null, null) as ImageSource;
+                effect.Texture2 = new ImageBrush(source);
+                sb.Begin();
+            }
+            else
+            {
+                sb.Stop();
             }
         }
 
@@ -154,7 +195,7 @@ namespace Sanguosha.UI.Controls
             PlayerViewModel model = DataContext as PlayerViewModel;
             model.IsSelected = false;
         }
-        
+
         private void btnSpectate_Click(object sender, System.Windows.RoutedEventArgs e)
         {
             // TODO: Add event handler implementation here.
@@ -163,13 +204,13 @@ namespace Sanguosha.UI.Controls
             {
                 handler(this, new EventArgs());
             }
-        }        
-        
+        }
+
         public event EventHandler OnRequestSpectate;
 
         #region PlayerInfoViewBase Members
 
-        protected override void UpdateCards()
+        internal override void UpdateCards()
         {
             weaponArea.Children.Clear();
             armorArea.Children.Clear();
@@ -177,14 +218,22 @@ namespace Sanguosha.UI.Controls
             horse2Area.Children.Clear();
             delayedToolsDock.Children.Clear();
 
+            base.UpdateCards();
+
             if (PlayerModel == null) return;
             var player = PlayerModel.Player;
             if (player == null) return;
 
-            foreach (var equip in player.Equipments())
+            EquipCommand[] commands = { PlayerModel.WeaponCommand, PlayerModel.ArmorCommand,
+                                        PlayerModel.DefensiveHorseCommand, PlayerModel.OffensiveHorseCommand };
+            foreach (var equip in commands)
             {
-                AddEquipment(CardView.CreateCard(equip, ParentGameView.GlobalCanvas), true);
+                if (equip != null)
+                {
+                    AddEquipment(CardView.CreateCard(equip, ParentGameView.GlobalCanvas), true);
+                }
             }
+
             foreach (var dt in player.DelayedTools())
             {
                 AddDelayedTool(CardView.CreateCard(dt, ParentGameView.GlobalCanvas), true);
@@ -202,7 +251,11 @@ namespace Sanguosha.UI.Controls
             }
             else
             {
-                handCardArea.AddCards(cards);
+                foreach (var card in cards)
+                {
+                    card.Disappear(1.0d, true);
+                }
+                handCardArea.RearrangeCards(cards);
             }
         }
 
@@ -326,7 +379,7 @@ namespace Sanguosha.UI.Controls
 
             SmallEquipView equipLabel = new SmallEquipView();
             equipLabel.DataContext = card.CardModel;
-            
+
             Canvas targetArea = null;
             switch (equip.Category)
             {
@@ -435,7 +488,7 @@ namespace Sanguosha.UI.Controls
             }
 
             card.Position = ComputeCardCenterPos(card, cbRoleBox);
-            
+
             ScaleTransform scale = new ScaleTransform();
             var transformGroup = new TransformGroup();
             transformGroup.Children.Add(scale);
@@ -449,12 +502,12 @@ namespace Sanguosha.UI.Controls
             Storyboard.SetTargetProperty(scaleXAnim, new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"));
             Storyboard.SetTargetProperty(scaleYAnim, new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)"));
             Storyboard storyboard = new Storyboard();
-            storyboard.Children.Add(scaleXAnim);            
+            storyboard.Children.Add(scaleXAnim);
             storyboard.Children.Add(scaleYAnim);
-            card.AddRebaseAnimation(storyboard, 0.5d);            
+            card.AddRebaseAnimation(storyboard, 0.5d);
             storyboard.AccelerationRatio = 0.4d;
             storyboard.Begin();
-            card.Disappear(0.5d, true);            
+            card.Disappear(0.5d, true);
         }
 
         protected override CardView RemoveRoleCard(Card card)

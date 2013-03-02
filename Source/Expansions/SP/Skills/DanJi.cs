@@ -27,14 +27,14 @@ namespace Sanguosha.Expansions.SP.Skills
             var trigger = new AutoNotifyPassiveSkillTrigger(
                 this,
                 (p, e, a) => {
-                    bool rulerIsCaoCao = Game.CurrentGame.AlivePlayers.Any(pl => pl.Role == Role.Ruler && pl.Hero.Name.Contains("CaoCao"));
+                    bool rulerIsCaoCao = Game.CurrentGame.AlivePlayers.Any(pl => pl.Role == Role.Ruler && (pl.Hero.Name.Contains("CaoCao") || pl.Hero2 != null && pl.Hero2.Name.Contains("CaoCao")));
                     return rulerIsCaoCao && p[DanJiAwaken] == 0 && Game.CurrentGame.Decks[p, DeckType.Hand].Count > p.Health;
                 },
                 (p, e, a) =>
                 {
                     p[DanJiAwaken] = 1;
                     Game.CurrentGame.LoseMaxHealth(p, 1);
-                    Game.CurrentGame.PlayerAcquireSkill(p, new MaShu());
+                    Game.CurrentGame.PlayerAcquireAdditionalSkill(p, new MaShu(), HeroTag);
                 },
                 TriggerCondition.OwnerIsSource
             );

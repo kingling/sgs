@@ -55,7 +55,7 @@ namespace Sanguosha.Expansions.Wind.Skills
         public static readonly PlayerAttribute ZhiYiZhong = PlayerAttribute.Register("ZhiYi", false, false, true);
         public static readonly PlayerAttribute BuZhiYiZhong = PlayerAttribute.Register("BuZhiYi", false, false, true);
 
-        protected override void NotifyAction(Player source, List<Player> targets, CompositeCard card)
+        public override void NotifyAction(Player source, List<Player> targets, CompositeCard card)
         {
             ActionLog log = new ActionLog();
             log.GameAction = GameAction.None;
@@ -63,7 +63,7 @@ namespace Sanguosha.Expansions.Wind.Skills
             log.SkillAction = this;
             log.Source = source;
             log.Targets = targets;
-            log.UseIndexLine = true;
+            log.ShowCueLine = true;
             log.SpecialEffectHint = GenerateSpecialEffectHintIndex(source, targets, card);
             Game.CurrentGame.NotificationProxy.NotifySkillUse(log);
             if (card.Subcards != null)

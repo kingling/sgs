@@ -29,33 +29,34 @@ namespace Sanguosha.Expansions.Woods.Skills
             }
             Player src1 = arg.Targets[0];
             Player src2 = arg.Targets[1];
-            DeckType DiMengDeck1 = new DeckType("DiMeng1");
-            DeckType DiMengDeck2 = new DeckType("DiMeng2");
+            StagingDeckType DiMengDeck = new StagingDeckType("DiMeng");
             Game.CurrentGame.EnterAtomicContext();
             CardsMovement move = new CardsMovement();
+            move.Helper.IsFakedMove = true;
             cards = new List<Card>(Game.CurrentGame.Decks[src1, DeckType.Hand]);
             move.Cards = new List<Card>(cards);
-            move.To = new DeckPlace(null, DiMengDeck1);
+            move.To = new DeckPlace(src1, DiMengDeck);
             Game.CurrentGame.MoveCards(move);
             Game.CurrentGame.PlayerLostCard(src1, cards);
 
             cards = new List<Card>(Game.CurrentGame.Decks[src2, DeckType.Hand]);
             move.Cards = new List<Card>(cards);
-            move.To = new DeckPlace(null, DiMengDeck2);
+            move.To = new DeckPlace(src2, DiMengDeck);
             Game.CurrentGame.MoveCards(move);
             Game.CurrentGame.PlayerLostCard(src2, cards);
             Game.CurrentGame.ExitAtomicContext();
 
-            Game.CurrentGame.SyncImmutableCards(src1, Game.CurrentGame.Decks[null, DiMengDeck2]);
+            move.Helper.IsFakedMove = false;
+            Game.CurrentGame.SyncImmutableCards(src1, Game.CurrentGame.Decks[src2, DiMengDeck]);
+            Game.CurrentGame.SyncImmutableCards(src2, Game.CurrentGame.Decks[src1, DiMengDeck]);
             Game.CurrentGame.EnterAtomicContext();
-            cards = new List<Card>(Game.CurrentGame.Decks[null, DiMengDeck2]);
+            cards = new List<Card>(Game.CurrentGame.Decks[src2, DiMengDeck]);
             move.Cards = new List<Card>(cards);
             move.To = new DeckPlace(src1, DeckType.Hand);
             Game.CurrentGame.MoveCards(move);
             Game.CurrentGame.PlayerAcquiredCard(src1, cards);
 
-            Game.CurrentGame.SyncImmutableCards(src2, Game.CurrentGame.Decks[null, DiMengDeck1]);
-            cards = new List<Card>(Game.CurrentGame.Decks[null, DiMengDeck1]);
+            cards = new List<Card>(Game.CurrentGame.Decks[src1, DiMengDeck]);
             move.Cards = new List<Card>(cards);
             move.To = new DeckPlace(src2, DeckType.Hand);
             Game.CurrentGame.MoveCards(move);

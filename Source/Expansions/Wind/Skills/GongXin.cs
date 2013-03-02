@@ -40,6 +40,10 @@ namespace Sanguosha.Expansions.Wind.Skills
             {
                 return VerifierResult.Fail;
             }
+            if (arg.Targets.Count > 0 && (arg.Targets[0].HandCards().Count == 0))
+            {
+                return VerifierResult.Fail;
+            }
             if (arg.Targets == null || arg.Targets.Count == 0)
             {
                 return VerifierResult.Partial;
@@ -69,14 +73,14 @@ namespace Sanguosha.Expansions.Wind.Skills
                 {
                     var theCard = answer[0][0];
                     Game.CurrentGame.SyncCardAll(ref theCard);
-                    Game.CurrentGame.NotificationProxy.NotifyLogEvent(new Prompt(Prompt.LogEventPrefix + "GongXin1", Owner, theCard));
+                    Game.CurrentGame.NotificationProxy.NotifyLogEvent(new LogEvent("GongXin1", Owner, target, theCard), new List<Player>() { Owner, target });
                     Game.CurrentGame.InsertBeforeDeal(target, new List<Card>() { theCard });
                 }
                 else if (answer[1] != null && answer[1].Count > 0)
                 {
                     var theCard = answer[1][0];
                     Game.CurrentGame.SyncCardAll(ref theCard);
-                    Game.CurrentGame.NotificationProxy.NotifyLogEvent(new Prompt(Prompt.LogEventPrefix + "GongXin2", Owner, theCard));
+                    Game.CurrentGame.NotificationProxy.NotifyLogEvent(new LogEvent("GongXin2", Owner, target, theCard), new List<Player>() { Owner, target });
                     Game.CurrentGame.PlaceIntoDiscard(target, new List<Card>() { theCard });
                 }
             }

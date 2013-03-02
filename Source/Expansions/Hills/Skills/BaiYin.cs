@@ -27,15 +27,15 @@ namespace Sanguosha.Expansions.Hills.Skills
             var trigger = new AutoNotifyPassiveSkillTrigger(
                 this,
                 (p, e, a) => { return p[BaiYinAwaken] == 0 && p[RenJie.RenMark] >= 4; },
-                (p, e, a) => 
+                (p, e, a) =>
                 {
                     p[BaiYinAwaken] = 1;
                     Game.CurrentGame.LoseMaxHealth(p, 1);
-                    Game.CurrentGame.PlayerAcquireSkill(p, new JiLveFangZhu());
-                    Game.CurrentGame.PlayerAcquireSkill(p, new JiLveGuiCai());
-                    Game.CurrentGame.PlayerAcquireSkill(p, new JiLveJiZhi());
-                    Game.CurrentGame.PlayerAcquireSkill(p, new JiLveWanSha());
-                    Game.CurrentGame.PlayerAcquireSkill(p, new JiLveZhiHeng());
+                    Game.CurrentGame.PlayerAcquireAdditionalSkill(p, new JiLveFangZhu(), HeroTag);
+                    Game.CurrentGame.PlayerAcquireAdditionalSkill(p, new JiLveGuiCai(), HeroTag);
+                    Game.CurrentGame.PlayerAcquireAdditionalSkill(p, new JiLveJiZhi(), HeroTag);
+                    Game.CurrentGame.PlayerAcquireAdditionalSkill(p, new JiLveWanSha(), HeroTag);
+                    Game.CurrentGame.PlayerAcquireAdditionalSkill(p, new JiLveZhiHeng(), HeroTag);
                 },
                 TriggerCondition.OwnerIsSource
             );
@@ -90,7 +90,7 @@ namespace Sanguosha.Expansions.Hills.Skills
                 Triggers.Clear();
                 var trigger = new AutoNotifyUsagePassiveSkillTrigger(
                     this,
-                    (p, e, a) => {return p[RenJie.RenMark] > 0;},
+                    (p, e, a) => { return p[RenJie.RenMark] > 0; },
                     Wrapper,
                     TriggerCondition.OwnerIsTarget,
                     new FangZhuVerifier()
@@ -106,9 +106,9 @@ namespace Sanguosha.Expansions.Hills.Skills
             {
                 Triggers.Add(GameEvent.PlayerUsedCard, new AutoNotifyPassiveSkillTrigger(this,
                     (p, e, a) => { return p[RenJie.RenMark] > 0 && CardCategoryManager.IsCardCategory(a.Card.Type.Category, CardCategory.ImmediateTool); },
-                    (p, e, a) => { p[RenJie.RenMark]--;  Game.CurrentGame.DrawCards(p, 1); },
+                    (p, e, a) => { p[RenJie.RenMark]--; Game.CurrentGame.DrawCards(p, 1); },
                     TriggerCondition.OwnerIsSource
-                ));
+                ) { Type = TriggerType.Skill });
             }
         }
 
@@ -165,7 +165,7 @@ namespace Sanguosha.Expansions.Hills.Skills
                 arg.Source[BaiYinWanShaUsed] = 1;
                 arg.Source[WanShaStatus] = 1;
                 ISkill skill = new WanSha();
-                Game.CurrentGame.PlayerAcquireSkill(arg.Source, skill);
+                Game.CurrentGame.PlayerAcquireAdditionalSkill(arg.Source, skill, HeroTag);
                 Game.CurrentGame.RegisterTrigger(GameEvent.PhasePostEnd, new WanShaRemoval(arg.Source, skill));
                 return true;
             }

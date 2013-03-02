@@ -91,6 +91,11 @@ namespace Sanguosha.Core.Network
             Trace.TraceInformation("Server initialized with capacity {0}", capacity);
         }
 
+        public bool IsDisconnected(int id)
+        {
+            return handlers[id].disconnected;
+        }
+
         /// <summary>
         /// Ready the server. Block if require more clients to connect.
         /// </summary>
@@ -119,7 +124,7 @@ namespace Sanguosha.Core.Network
                         item = null;
                     }
                     if (!(item is LoginToken) ||
-                     !game.Configuration.AccountIds.Any(id => id.token == ((LoginToken)item).token))
+                     !game.Configuration.AccountIds.Any(id => id.TokenString == ((LoginToken)item).TokenString))
                     {
                         handlers[i].client.Close();
                         i--; 
@@ -128,7 +133,7 @@ namespace Sanguosha.Core.Network
                     int index;
                     for (index = 0; index < game.Configuration.AccountIds.Count; index++)
                     {
-                        if (game.Configuration.AccountIds[index].token == ((LoginToken)item).token)
+                        if (game.Configuration.AccountIds[index].TokenString == ((LoginToken)item).TokenString)
                         {
                             game.Settings.Accounts.Add(game.Configuration.Accounts[index]);
                         }
@@ -154,19 +159,16 @@ namespace Sanguosha.Core.Network
             spectatorHandler.stream = new ReplaySplitterStream();
             spectatorHandler.receiver = new ItemReceiver(spectatorHandler.stream);
             spectatorHandler.sender = new ItemSender(spectatorHandler.stream);
-            spectatorHandler.threadServer = new Thread((ParameterizedThreadStart)((o) =>
-            {
-                ServerThread(handlers[(int)o]);
-            })) { IsBackground = true };
+            spectatorHandler.disconnected = true;
+            spectatorHandler.threadServer = null;
             spectatorHandler.threadClient = new Thread((ParameterizedThreadStart)((o) =>
             {
                 ClientThread(handlers[(int)o]);
             })) { IsBackground = true };
             handlers.Add(spectatorHandler);
-            spectatorHandler.threadServer.Start(handlers.Count - 1);
             spectatorHandler.threadClient.Start(handlers.Count - 1);
             Trace.TraceInformation("Server ready");
-            reconnectThread = new Thread(ReconnectionListener);
+            reconnectThread = new Thread(ReconnectionListener) { IsBackground = true };
             reconnectThread.Start();
         }
         
@@ -201,7 +203,7 @@ namespace Sanguosha.Core.Network
                             client.Close();
                             continue;
                         }
-                        if (!game.Configuration.AccountIds.Any(id => id.token == ((LoginToken)item).token))
+                        if (!game.Configuration.AccountIds.Any(id => id.TokenString == ((LoginToken)item).TokenString))
                         {
                             spectatorJoining = true;
                         }
@@ -210,7 +212,7 @@ namespace Sanguosha.Core.Network
                             int index;
                             for (index = 0; index < game.Configuration.AccountIds.Count; index++)
                             {
-                                if (game.Configuration.AccountIds[index].token == ((LoginToken)item).token)
+                                if (game.Configuration.AccountIds[index].TokenString == ((LoginToken)item).TokenString)
                                 {
                                     theAccount = game.Configuration.Accounts[index];
                                 }
@@ -227,7 +229,13 @@ namespace Sanguosha.Core.Network
                         if (spectatorJoining)
                         {
                             ReplaySplitterStream rpstream = handlers[indexC].stream as ReplaySplitterStream;
+                            var tempSender = new ItemSender(stream);
+                            tempSender.Send(new CommandItem() { command = Command.Detach, type = ItemType.Int, data = 0 });
+                            tempSender.Flush();
                             rpstream.DumpTo(stream);
+                            stream.Flush();
+                            tempSender.Send(new CommandItem() { command = Command.Attach, type = ItemType.Int, data = 0 });
+                            tempSender.Flush();
                             rpstream.AddStream(stream);
                         }
                         else
@@ -392,7 +400,7 @@ namespace Sanguosha.Core.Network
         {
             object o;
             if (handlers[clientId].disconnected) return null;
-            handlers[clientId].semIn.WaitOne();
+            if (!handlers[clientId].semIn.WaitOne()) return null;
             lock (handlers[clientId].queueIn)
             {
                 o = handlers[clientId].queueIn.Dequeue();
@@ -414,7 +422,7 @@ namespace Sanguosha.Core.Network
         {
             object o;
             if (handlers[clientId].disconnected) return null;
-            handlers[clientId].semIn.WaitOne();
+            if (!handlers[clientId].semIn.WaitOne()) return null;
             lock (handlers[clientId].queueIn)
             {
                 o = handlers[clientId].queueIn.Dequeue();
@@ -426,7 +434,7 @@ namespace Sanguosha.Core.Network
         {
             object o;
             if (handlers[clientId].disconnected) return null;
-            handlers[clientId].semIn.WaitOne();
+            if (!handlers[clientId].semIn.WaitOne()) return null;
             lock (handlers[clientId].queueIn)
             {
                 o = handlers[clientId].queueIn.Dequeue();
@@ -448,7 +456,7 @@ namespace Sanguosha.Core.Network
         {
             object o;
             if (handlers[clientId].disconnected) return null;
-            handlers[clientId].semIn.WaitOne();
+            if (!handlers[clientId].semIn.WaitOne()) return null;
             lock (handlers[clientId].queueIn)
             {
                 o = handlers[clientId].queueIn.Dequeue();
@@ -537,7 +545,7 @@ namespace Sanguosha.Core.Network
             {
                 SendObject(i, new TerminationObject());
                 handlers[i].threadClient.Join();
-                handlers[i].threadServer.Abort();
+                if (handlers[i].threadServer != null) handlers[i].threadServer.Abort();
             }
             listener.Stop();
             reconnectThread.Abort();

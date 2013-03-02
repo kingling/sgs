@@ -26,16 +26,25 @@ namespace Sanguosha.UI.Controls
         DispatcherTimer _cleanUpCounter;
         int _currentTime;
 
+        private EventHandler _cleanUpHandler;
+
         public KeyEventNotifierView()
         {
             this.InitializeComponent();
             _timeStamps = new List<int>();
             _cleanUpCounter = new DispatcherTimer(DispatcherPriority.ContextIdle);
             _cleanUpCounter.Interval = TimeSpan.FromSeconds(1.0);
-            _cleanUpCounter.Tick += _cleanUpCounter_Elapsed;
+            _cleanUpHandler = _cleanUpCounter_Elapsed;
+            _cleanUpCounter.Tick += _cleanUpHandler;
             _cleanUpCounter.Start();
             _currentTime = 0;
             _disappearing = new List<bool>();
+            this.Unloaded += KeyEventNotifierView_Unloaded;
+        }
+
+        void KeyEventNotifierView_Unloaded(object sender, RoutedEventArgs e)
+        {
+            _cleanUpCounter.Tick -= _cleanUpHandler;
         }
 
         static int _cleanUpElapsedTimeThreshold = 3;
@@ -92,15 +101,17 @@ namespace Sanguosha.UI.Controls
                 Background = new SolidColorBrush(Colors.Transparent),
                 BorderThickness = new Thickness(0d),                
                 Width = width,
-                Effect = new DropShadowEffect() { Color = Colors.Black, BlurRadius = 3, ShadowDepth = 0 },                
+                Effect = new DropShadowEffect() { Color = Colors.Black, BlurRadius = 3, ShadowDepth = 0 },
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                Margin = new Thickness(5, 3, 5, 3)
             };
             
             Border border = new Border()
             {
-                CornerRadius = new CornerRadius(3d),
+                CornerRadius = new CornerRadius(6d),
                 Child = rtb,
-                Width = width,
-                Background = new SolidColorBrush(Color.FromArgb(0xFF, 0x3D, 0x3A, 0x2C)),
+                Width = width,                
+                Background = new SolidColorBrush(Color.FromArgb(0xFF, 0x30, 0x2F, 0x1A)),
                 BorderThickness = new Thickness(1d),
                 Opacity = 0d,
                 HorizontalAlignment = System.Windows.HorizontalAlignment.Center

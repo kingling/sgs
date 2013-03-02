@@ -6,6 +6,9 @@ using System.Text;
 using Sanguosha.Core.Triggers;
 using Sanguosha.Core.Cards;
 using Sanguosha.Core.UI;
+using Sanguosha.Core.Players;
+using Sanguosha.Core.Games;
+using Sanguosha.Core.Heroes;
 
 namespace Sanguosha.Core.Skills
 {
@@ -19,9 +22,10 @@ namespace Sanguosha.Core.Skills
 
         public ActiveSkill()
         {
-            linkedPassiveSkill = null;
-            ExtraCardsDeck = null;
+            LinkedPassiveSkill = null;
             Helper = new UiHelper();
+            DeckCleanup = new List<DeckType>();
+            AttributeCleanup = new List<PlayerAttribute>();
         }
 
         /// <summary>
@@ -42,10 +46,11 @@ namespace Sanguosha.Core.Skills
         public virtual bool NotifyAndCommit(GameEventArgs arg)
         {
             NotifyAction(Owner, arg.Targets, arg.Cards);
+            if (IsAwakening || IsSingleUse) Core.Utils.GameDelays.Delay(Utils.GameDelayTypes.Awaken);
             return Commit(arg);
         }
 
-        protected PassiveSkill linkedPassiveSkill;
+        public PassiveSkill LinkedPassiveSkill { get; protected set; }
         Players.Player owner;
         public virtual Players.Player Owner
         {
@@ -54,14 +59,22 @@ namespace Sanguosha.Core.Skills
             {
                 if (owner == value) return;
                 owner = value;
-                if (linkedPassiveSkill != null)
+                if (LinkedPassiveSkill != null)
                 {
-                    linkedPassiveSkill.Owner = value;
+                    LinkedPassiveSkill.HeroTag = HeroTag;
+                    LinkedPassiveSkill.Owner = value;
+                }
+                if (owner != null)
+                {
+                    foreach (var dk in DeckCleanup) Game.CurrentGame.RegisterSkillCleanup(this, dk);
+                    foreach (var att in AttributeCleanup) Game.CurrentGame.RegisterMarkCleanup(this, att);
                 }
             }
         }
 
-        public void NotifyAction(Players.Player source, List<Players.Player> targets, List<Card> cards)
+        public Hero HeroTag { get; set; }
+
+        public virtual void NotifyAction(Players.Player source, List<Players.Player> targets, List<Card> cards)
         {
             ActionLog log = new ActionLog();
             log.GameAction = GameAction.None;
@@ -110,7 +123,9 @@ namespace Sanguosha.Core.Skills
             return skill;
         }
 
-        public DeckType ExtraCardsDeck { get; protected set; }
+        protected List<DeckType> DeckCleanup { get; private set; }
+        protected List<PlayerAttribute> AttributeCleanup { get; private set; }
+
         public bool IsRulerOnly { get; protected set; }
         public bool IsSingleUse { get; protected set; }
         public bool IsAwakening { get; protected set; }

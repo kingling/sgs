@@ -27,13 +27,14 @@ namespace Sanguosha.UI.Controls
         #region Constructors
         public PlayerViewModel()
         {
+            Hero1Model = new HeroViewModel();
+            Hero2Model = new HeroViewModel();
+
             IsSelectionMode = false;
             AutoInvokeSkillCommands = new ObservableCollection<SkillCommand>();
             ActiveSkillCommands = new ObservableCollection<SkillCommand>();
-            DockedSkillCommands = new ObservableCollection<SkillCommand>();
             RulerGivenSkillCommands = new ObservableCollection<SkillCommand>();
-            HeroSkillNames = new ObservableCollection<string>();
-            heroNameChars = new ObservableCollection<string>();
+
             PrivateDecks = new ObservableCollection<PrivateDeckViewModel>();
 
             MultiChoiceCommands = new ObservableCollection<ICommand>();
@@ -48,6 +49,7 @@ namespace Sanguosha.UI.Controls
 
             _possibleRoles = new ObservableCollection<Role>();
             _updateCardUsageStatusHandler = (o, e) => { _UpdateCardUsageStatus(); };
+            _onSkillCommandSelectedHandler = _OnSkillCommandSelected;
             IsCardChoiceQuestionShown = false;
 
             Marks = new ObservableCollection<MarkViewModel>();
@@ -61,7 +63,7 @@ namespace Sanguosha.UI.Controls
             : this()
         {
             Player = player;
-            GameModel = game;            
+            GameModel = game;
         }
         #endregion
 
@@ -73,7 +75,7 @@ namespace Sanguosha.UI.Controls
             get
             {
                 return GameModel.IsPlayable && this == GameModel.MainPlayerModel;
-            }            
+            }
         }
 
         public bool CanSpectate
@@ -93,12 +95,14 @@ namespace Sanguosha.UI.Controls
                 if (_player == value) return;
                 if (_player != null)
                 {
-                    PropertyChangedEventHandler handler = _PropertyChanged;
-                    _player.PropertyChanged -= handler;
+                    _player.PropertyChanged -= _PropertyChanged;
                 }
                 _player = value;
-                _PropertyChanged = _OnPlayerPropertyChanged;
-                _player.PropertyChanged += _PropertyChanged;
+                if (_player != null)
+                {
+                    _PropertyChanged = _OnPlayerPropertyChanged;
+                    _player.PropertyChanged += _PropertyChanged;
+                }
                 var properties = typeof(Player).GetProperties();
                 foreach (var property in properties)
                 {
@@ -147,6 +151,8 @@ namespace Sanguosha.UI.Controls
             ActiveSkillCommands.Clear();
             AutoInvokeSkillCommands.Clear();
 
+            if (_player == null) return;
+
             var backup = new List<SkillCommand>(DockedSkillCommands);
             backup.AddRange(RulerGivenSkillCommands);
 
@@ -177,7 +183,9 @@ namespace Sanguosha.UI.Controls
                     }
                     else
                     {
-                        DockedSkillCommands.Add(command);
+                        var hero = GetHeroModel(skill.HeroTag);
+                        Trace.Assert(hero != null);
+                        hero.SkillCommands.Add(command);
                     }
 
                 }
@@ -188,7 +196,8 @@ namespace Sanguosha.UI.Controls
                 if (!_player.Skills.Any(s => skillCommand.Skill == s))
                 {
                     AutoInvokeSkillCommands.Remove(skillCommand);
-                    DockedSkillCommands.Remove(skillCommand);
+                    if (Hero1Model != null) Hero1Model.SkillCommands.Remove(skillCommand);
+                    if (Hero2Model != null) Hero2Model.SkillCommands.Remove(skillCommand);
                     RulerGivenSkillCommands.Remove(skillCommand);
                 }
             }
@@ -204,36 +213,9 @@ namespace Sanguosha.UI.Controls
                     ActiveSkillCommands.Add(command);
                 }
             }
-        }
 
-        private void _UpdateHeroInfo()
-        {
-            HeroSkillNames.Clear();
-            heroNameChars.Clear();
-
-            if (Hero != null)
-            {
-                string name = Application.Current.TryFindResource(string.Format("Hero.{0}.Name", Hero.Name)) as string;
-                if (name != null)
-                {
-                    foreach (var heroChar in name)
-                    {
-                        if (heroNameChars.Count > 0 && (char.IsUpper(heroChar) || char.IsLower(heroChar)) &&
-                            (char.IsUpper(heroNameChars.Last().Last()) || char.IsUpper(heroNameChars.Last().Last())))
-                        {
-                            heroNameChars[heroNameChars.Count - 1] += heroChar;
-                        }
-                        else
-                        {
-                            heroNameChars.Add(heroChar.ToString());
-                        }
-                    }
-                }
-                foreach (var skill in Hero.Skills)
-                {
-                    HeroSkillNames.Add(skill.GetType().Name);
-                }
-            }
+            Hero1Model.UpdateSkillNames();
+            Hero2Model.UpdateSkillNames();
         }
 
         private void _OnPlayerPropertyChanged(object o, PropertyChangedEventArgs e)
@@ -247,16 +229,19 @@ namespace Sanguosha.UI.Controls
             }
             else if (name == "Hero")
             {
-                if (Application.Current.Dispatcher.CheckAccess())
+                Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
                 {
-                    _UpdateHeroInfo();
-                }
-                else
-                {
-                    Application.Current.Dispatcher.Invoke((ThreadStart)_UpdateHeroInfo);
+                    Hero1Model.Hero = Hero;
                     OnPropertyChanged("Hero");
-                    OnPropertyChanged("HeroName");
-                }
+                });
+            }
+            else if (name == "Hero2")
+            {
+                Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
+                {
+                    Hero2Model.Hero = Hero2;
+                    OnPropertyChanged("Hero2");
+                });
             }
             else if (name == "Skills")
             {
@@ -292,6 +277,15 @@ namespace Sanguosha.UI.Controls
 
         private void _UpdateAttributes()
         {
+            if (_player == null)
+            {
+                IsDrank = false;
+                IsDying = false;
+                StatusMarks.Clear();
+                Marks.Clear();
+                return;
+            }
+
             foreach (var attribute in _player.Attributes.Keys)
             {
                 if (attribute == Sanguosha.Expansions.Battle.Cards.Jiu.Drank)
@@ -484,6 +478,7 @@ namespace Sanguosha.UI.Controls
         {
             get
             {
+                if (_player == null) return null;
                 return _player.Hero;
             }
         }
@@ -492,6 +487,7 @@ namespace Sanguosha.UI.Controls
         {
             get
             {
+                if (_player == null) return null;
                 return _player.Hero2;
             }
         }
@@ -500,6 +496,7 @@ namespace Sanguosha.UI.Controls
         {
             get
             {
+                if (_player == null) return -1;
                 return _player.Id;
             }
         }
@@ -508,6 +505,7 @@ namespace Sanguosha.UI.Controls
         {
             get
             {
+                if (_player == null) return false;
                 return _player.IsFemale;
             }
         }
@@ -516,13 +514,14 @@ namespace Sanguosha.UI.Controls
         {
             get
             {
+                if (_player == null) return false;
                 return _player.IsMale;
             }
         }
 
-        public bool IsIronShackled { get { return _player.IsIronShackled; } }
+        public bool IsIronShackled { get { if (_player == null) return false; return _player.IsIronShackled; } }
 
-        public bool IsImprisoned { get { return _player.IsImprisoned; } }
+        public bool IsImprisoned { get { return _player != null && _player.IsImprisoned; } }
 
         private bool _isDrank;
 
@@ -537,7 +536,7 @@ namespace Sanguosha.UI.Controls
             }
         }
 
-        public bool IsTargeted { get { return _player.IsTargeted; } }
+        public bool IsTargeted { get { return _player != null && _player.IsTargeted; } }
 
         public bool IsCurrentPlayer
         {
@@ -567,13 +566,25 @@ namespace Sanguosha.UI.Controls
         {
             get
             {
-                return _player.IsDead;
+                return _player != null && _player.IsDead;
             }
         }
 
         #endregion
 
         #region Derived Player Properties
+
+        public HeroViewModel Hero1Model
+        {
+            get;
+            set;
+        }
+
+        public HeroViewModel Hero2Model
+        {
+            get;
+            set;
+        }
 
         public ObservableCollection<MarkViewModel> Marks
         {
@@ -599,10 +610,15 @@ namespace Sanguosha.UI.Controls
             private set;
         }
 
-        public ObservableCollection<SkillCommand> DockedSkillCommands
+        public IEnumerable<SkillCommand> DockedSkillCommands
         {
-            get;
-            private set;
+            get
+            {
+                IEnumerable<SkillCommand> result = new List<SkillCommand>();
+                if (Hero1Model != null) result = result.Concat(Hero1Model.SkillCommands);
+                if (Hero2Model != null) result = result.Concat(Hero2Model.SkillCommands);
+                return result;
+            }
         }
 
         public ObservableCollection<SkillCommand> ActiveSkillCommands
@@ -641,47 +657,6 @@ namespace Sanguosha.UI.Controls
             }
         }
 
-        private string _impersonatedHeroName;
-        public string ImpersonatedHeroName
-        {
-            get
-            {
-                return _impersonatedHeroName;
-            }
-            set
-            {
-                if (_impersonatedHeroName == value) return;
-                _impersonatedHeroName = value;
-                OnPropertyChanged("ImpersonatedHeroName");
-            }
-        }
-
-        private string _impersonatedSkill;
-
-        public string ImpersonatedSkill
-        {
-            get
-            {
-                return _impersonatedSkill;
-            }
-            set
-            {
-                if (_impersonatedSkill == value) return;
-                _impersonatedSkill = value;
-                OnPropertyChanged("ImpersonatedSkill");
-            }
-        }
-
-        /// <summary>
-        /// Returns the skill names of the primary hero.
-        /// </summary>
-        /// <remarks>For displaying tooltip purposes.</remarks>
-        public ObservableCollection<string> HeroSkillNames
-        {
-            get;
-            private set;
-        }
-
         private PrivateDeckViewModel _currentPrivateDeck;
 
         public PrivateDeckViewModel CurrentPrivateDeck
@@ -695,30 +670,6 @@ namespace Sanguosha.UI.Controls
             }
         }
 
-        public string HeroName
-        {
-            get
-            {
-                if (_player == null || _player.Hero == null)
-                {
-                    return string.Empty;
-                }
-                else
-                {
-                    return (_player.Hero.Name);
-                }
-            }
-        }
-
-        ObservableCollection<string> heroNameChars;
-
-        public ObservableCollection<string> HeroNameChars
-        {
-            get
-            {
-                return heroNameChars;
-            }
-        }
 
         private static List<Role> roleGameRoles = new List<Role>() { Role.Loyalist, Role.Defector, Role.Rebel };
 
@@ -728,7 +679,7 @@ namespace Sanguosha.UI.Controls
         {
             _possibleRoles.Clear();
             _possibleRoles.Add(Role.Unknown);
-            if (GameModel != null)
+            if (GameModel != null && _player != null)
             {
                 if (GameModel.Game is RoleGame)
                 {
@@ -865,7 +816,18 @@ namespace Sanguosha.UI.Controls
             // Card usage question
             lock (verifierLock)
             {
-                _ResetAll();
+                var guHuoSkill = skill as IAdditionalTypedSkill;
+                if (guHuoSkill != null)
+                {
+                    // Reset all will also clear the GuHuoChoice recorded. So restore it after resetting the buttons.
+                    var backup = guHuoSkill.AdditionalType;
+                    _ResetAll();
+                    guHuoSkill.AdditionalType = backup;
+                }
+                else
+                {
+                    _ResetAll();
+                }
                 if (currentUsageVerifier != null)
                 {
                     currentUsageVerifier = null;
@@ -1027,6 +989,7 @@ namespace Sanguosha.UI.Controls
 
         #region IASyncUiProxy Helpers
         ICardUsageVerifier currentUsageVerifier;
+
         SkillCommand _GetSelectedSkillCommand(out bool isEquipSkill)
         {
             foreach (var skillCommand in ActiveSkillCommands)
@@ -1116,6 +1079,7 @@ namespace Sanguosha.UI.Controls
             foreach (var skillCommand in ActiveSkillCommands)
             {
                 skillCommand.IsSelected = false;
+                skillCommand.OnSelectedChanged -= _onSkillCommandSelectedHandler;
                 skillCommand.IsEnabled = false;
             }
 
@@ -1145,8 +1109,71 @@ namespace Sanguosha.UI.Controls
             TimeOutSeconds = 0;
         }
 
+        private EventHandler _onSkillCommandSelectedHandler;
+
+        SkillCommand _lastSelectedCommand;
+        bool _cleaningUp;
+        private void _OnSkillCommandSelected(object sender, EventArgs args)
+        {
+            var skill = sender as SkillCommand;
+            if (skill.IsSelected)
+            {
+                if (skill == _lastSelectedCommand)
+                {
+                    Trace.Assert(skill is GuHuoSkillCommand);
+                }
+                else if (_lastSelectedCommand != null)
+                {
+                    _cleaningUp = true;
+                    _lastSelectedCommand.IsSelected = false;
+                    _cleaningUp = false;
+                    Trace.Assert(_lastSelectedCommand == null);
+                }
+
+                _lastSelectedCommand = skill;
+
+            }
+            else
+            {
+                if (skill != _lastSelectedCommand)
+                {
+                    Trace.Assert(skill is GuHuoSkillCommand);
+                }
+                else
+                {
+                    foreach (EquipCommand equipCmd in EquipCommands)
+                    {
+                        equipCmd.IsSelected = false;
+                    }
+
+                    foreach (CardViewModel card in HandCards)
+                    {
+                        card.IsSelected = false;
+                    }
+
+                    foreach (var playerModel in _game.PlayerModels)
+                    {
+                        playerModel.IsSelected = false;
+                    }
+
+                    _lastSelectedPlayers.Clear();
+                    _lastSelectedCommand = null;
+                }
+            }
+
+            if (!_cleaningUp && currentUsageVerifier != null)
+            {
+                _UpdateCardUsageStatus();
+            }
+        }
+
         private void _UpdateCardUsageStatus()
         {
+            if (currentUsageVerifier == null)
+            {
+                return;
+            }
+
             List<Card> cards = _GetSelectedNonEquipCards();
             List<Player> players = _GetSelectedPlayers();
             ISkill skill = null;
@@ -1159,6 +1186,7 @@ namespace Sanguosha.UI.Controls
                 {
                     return;
                 }
+
                 if (currentUsageVerifier.Helper.IsActionStage)
                 {
                     cancelCardUsageCommand.CanExecuteStatus = (cards.Count != 0 || players.Count != 0 || command != null);
@@ -1167,6 +1195,38 @@ namespace Sanguosha.UI.Controls
                 if (command != null)
                 {
                     skill = command.Skill;
+                }
+
+                // are we really able to use this equip as command?
+                if (isEquipCommand)
+                {
+                    Trace.Assert(skill != null);
+                    if (currentUsageVerifier.Verify(HostPlayer, skill, new List<Card>(), new List<Player>()) == VerifierResult.Fail)
+                    {
+                        //nope, not really
+                        isEquipCommand = false;
+                        skill = null;
+                    }
+                }
+
+                string prompt = null;
+                if (skill != null)
+                {
+                    prompt = Application.Current.TryFindResource(string.Format("Skill.{0}.Prompt", skill.GetType().Name)) as string;
+                }
+                if (prompt == null)
+                {
+                    prompt = PromptFormatter.Format(CurrentPrompt);
+                }
+                CurrentPromptString = prompt;
+
+                if (!isEquipCommand)
+                {
+                    foreach (var equipCommand in EquipCommands)
+                    {
+                        if (equipCommand.IsSelected)
+                            cards.Add(equipCommand.Card);
+                    }
                 }
 
                 var sc = new List<SkillCommand>(ActiveSkillCommands);
@@ -1254,42 +1314,6 @@ namespace Sanguosha.UI.Controls
                                 }
                             }
                         }
-                        else if (skillCommand.IsSelected && !skillCommand.IsSelected)
-                        {
-                            cmdGuhuo.GuHuoChoice = null;
-                        }
-                    }
-                }
-
-                // are we really able to use this equip as command?
-                if (isEquipCommand)
-                {
-                    Trace.Assert(skill != null);
-                    if (currentUsageVerifier.Verify(HostPlayer, skill, new List<Card>(), new List<Player>()) == VerifierResult.Fail)
-                    {
-                        //nope, not really
-                        isEquipCommand = false;
-                        skill = null;
-                    }
-                }
-
-                string prompt = null;
-                if (skill != null)
-                {
-                    prompt = Application.Current.TryFindResource(string.Format("Skill.{0}.Prompt", skill.GetType().Name)) as string;
-                }
-                if (prompt == null)
-                {
-                    prompt = PromptFormatter.Format(CurrentPrompt);
-                }
-                CurrentPromptString = prompt;
-
-                if (!isEquipCommand)
-                {
-                    foreach (var equipCommand in EquipCommands)
-                    {
-                        if (equipCommand.IsSelected)
-                            cards.Add(equipCommand.Card);
                     }
                 }
 
@@ -1302,9 +1326,10 @@ namespace Sanguosha.UI.Controls
                     {
                         playerModel.IsSelected = false;
                     }
+                    players.Clear();
                     _lastSelectedPlayers.Clear();
-
                 }
+
                 else if (status == VerifierResult.Partial)
                 {
                     submitCardUsageCommand.CanExecuteStatus = false;
@@ -1427,6 +1452,8 @@ namespace Sanguosha.UI.Controls
         }
 
         private EventHandler _updateCardUsageStatusHandler;
+
+
         #endregion
 
         #region IAsyncUiProxy
@@ -1444,6 +1471,7 @@ namespace Sanguosha.UI.Controls
 
         public void AskForCardUsage(Prompt prompt, ICardUsageVerifier verifier, int timeOutSeconds)
         {
+            if (ViewModelBase.IsDetached) return;
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
                 GameModel.CurrentActivePlayer = this;
@@ -1454,6 +1482,19 @@ namespace Sanguosha.UI.Controls
                     Trace.Assert(currentUsageVerifier != null);
                     CurrentPrompt = prompt;
                     CurrentPromptString = PromptFormatter.Format(prompt);
+                }
+
+                if (prompt.Values.Count != 0 && prompt.Values[0] is TriggerSkill)
+                {
+                    var triggerSkill = (prompt.Values[0] as TriggerSkill);
+                    foreach (var skill in SkillCommands)
+                    {
+                        if (skill.Skill is CardTransformSkill && (skill.Skill as CardTransformSkill).LinkedPassiveSkill != triggerSkill) continue;
+                        if (skill.Skill is ActiveSkill && (skill.Skill as ActiveSkill).LinkedPassiveSkill != triggerSkill) continue;
+                        if (skill.Skill is TriggerSkill && skill.Skill != triggerSkill) continue;
+                        skill.IsHighlighted = true;
+                        break;
+                    }
                 }
 
                 if (verifier != null && verifier.Helper != null &&
@@ -1521,7 +1562,7 @@ namespace Sanguosha.UI.Controls
                     {
                         (skillCommand as GuHuoSkillCommand).GuHuoChoice = null;
                     }
-                    skillCommand.OnSelectedChanged += _updateCardUsageStatusHandler;
+                    skillCommand.OnSelectedChanged += _onSkillCommandSelectedHandler;
                 }
 
                 // @todo: update this.
@@ -1623,7 +1664,7 @@ namespace Sanguosha.UI.Controls
                         ChoiceIndex = i
                     };
                     choiceModel.MultiChoiceCommands.Add(command);
-                }                
+                }
             }
             else
             {
@@ -1704,6 +1745,13 @@ namespace Sanguosha.UI.Controls
                                      AdditionalCardChoiceOptions options,
                                      CardChoiceRearrangeCallback callback)
         {
+            if (ViewModelBase.IsDetached) return;
+            if (this != GameModel.MainPlayerModel && (verifier.Helper == null || !verifier.Helper.ShowToAll))
+            {
+                TimeOutSeconds = timeOutSeconds;
+                CardChoiceAnsweredEvent(null);
+                return;
+            }
             Trace.Assert(resultDeckMaximums.Count == resultDeckNames.Count);
 
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
@@ -1757,6 +1805,7 @@ namespace Sanguosha.UI.Controls
 
         public void AskForMultipleChoice(Prompt prompt, List<OptionPrompt> choices, int timeOutSeconds)
         {
+            if (ViewModelBase.IsDetached) return;
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
                 GameModel.CurrentActivePlayer = this;
@@ -1852,6 +1901,7 @@ namespace Sanguosha.UI.Controls
 
         public void Freeze()
         {
+            if (ViewModelBase.IsDetached) return;
             Application.Current.Dispatcher.Invoke((ThreadStart)delegate()
             {
                 lock (verifierLock)
@@ -1932,6 +1982,13 @@ namespace Sanguosha.UI.Controls
             {
                 ExecuteMultiChoiceCommand(0);
             }
+        }
+
+        internal HeroViewModel GetHeroModel(Hero hero)
+        {
+            if (Hero == hero) return Hero1Model;
+            else if (Hero2 == hero) return Hero2Model;
+            else return null;
         }
     }
 }

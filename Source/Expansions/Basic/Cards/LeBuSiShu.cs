@@ -38,7 +38,7 @@ namespace Sanguosha.Expansions.Basic.Cards
                 ReadOnlyCard result = Game.CurrentGame.Judge(p, null, c, (judgeResultCard) => { return judgeResultCard.Suit != SuitType.Heart; });
                 if (result.Suit != SuitType.Heart)
                 {
-                    var theTrigger = new LeBuSiShuTrigger() { Priority = int.MaxValue };
+                    var theTrigger = new LeBuSiShuTrigger() { Priority = int.MaxValue, Type = TriggerType.Skill };
                     theTrigger.Owner = p;
                     Game.CurrentGame.RegisterTrigger(GameEvent.PhaseOutEvents[TurnPhase.Draw], theTrigger);
                 }
@@ -49,7 +49,7 @@ namespace Sanguosha.Expansions.Basic.Cards
             move.Cards.Add(c);
             move.To = new DeckPlace(null, DeckType.Discard);
             move.Helper.IsFakedMove = true;
-            Game.CurrentGame.MoveCards(move);
+            Game.CurrentGame.MoveCards(move, false, Core.Utils.GameDelayTypes.None);
         }
 
         protected override void Process(Player source, Player dest, ICard card, ReadOnlyCard readonlyCard, GameEventArgs inResponseTo)

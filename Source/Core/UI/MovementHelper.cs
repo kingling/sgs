@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Sanguosha.Core.Heroes;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -32,6 +33,36 @@ namespace Sanguosha.Core.UI
         {
             get { return isWuGu; }
             set { isWuGu = value; }
+        }
+
+        private Hero privateDeckHeroTag;
+
+        public Hero PrivateDeckHeroTag
+        {
+            get { return privateDeckHeroTag; }
+            set { privateDeckHeroTag = value; }
+        }
+
+        private bool alwaysShowLog;
+
+        //show card move log even faked move.  e.g.落英
+        public bool AlwaysShowLog
+        {
+            get { return alwaysShowLog; }
+            set { alwaysShowLog = value; }
+        }
+
+        public MovementHelper()
+        {
+        }
+
+        public MovementHelper(MovementHelper helper)
+        {
+            IsFakedMove = helper.IsFakedMove;
+            WindowId = helper.WindowId;
+            IsWuGu = helper.IsWuGu;
+            PrivateDeckHeroTag = helper.PrivateDeckHeroTag;
+            AlwaysShowLog = helper.AlwaysShowLog;
         }
     }
 }

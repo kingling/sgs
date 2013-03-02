@@ -53,6 +53,8 @@ namespace Sanguosha.UI.Controls
 
         public void AppendPickHeroLog(Player player, bool isPrimaryHero)
         {
+            if (!Logs.ContainsKey(player)) return;
+            
             if (isPrimaryHero && player.Hero == null) return;
             else if (!isPrimaryHero && player.Hero2 == null) return;
 
@@ -80,11 +82,11 @@ namespace Sanguosha.UI.Controls
             var docs = (from pair in Logs
                         where (source.Player == pair.Key || dest.Player == pair.Key)
                         select pair.Value).Concat(new List<FlowDocument>() { GlobalLog });
-            
+
             foreach (var doc in docs)
             {
                 var paragraph = LogFormatter.RichTranslateCardMove(cards, source, dest, reason);
-                
+
                 if (paragraph.Inlines.Count > 0)
                 {
                     doc.Blocks.Add(paragraph);
@@ -98,7 +100,7 @@ namespace Sanguosha.UI.Controls
             var docs = Logs.Values.Concat(new List<FlowDocument>() { GlobalLog });
             foreach (var doc in docs)
             {
-                if (doc.Blocks.Last().Name == _separatorMagic)
+                if (doc.Blocks.Count() != 0 && doc.Blocks.Last().Name == _separatorMagic)
                 {
                     continue;
                 }
@@ -109,11 +111,11 @@ namespace Sanguosha.UI.Controls
                 rect1.Width = 210;
                 rect1.Height = 1;
                 rect1.Fill = new SolidColorBrush(Colors.Black);
-                
+
                 var rect2 = new Rectangle();
                 rect2.Width = 210;
                 rect2.Height = 1;
-                rect2.Fill = new SolidColorBrush(new Color(){ R = 77, G=74, B = 66, A = 255 });
+                rect2.Fill = new SolidColorBrush(new Color() { R = 77, G = 74, B = 66, A = 255 });
 
                 para.Inlines.Add(rect1);
                 para.Inlines.Add(rect2);
@@ -124,6 +126,7 @@ namespace Sanguosha.UI.Controls
 
         public void AppendDamageLog(Player source, Player target, int magnitude, DamageElement element)
         {
+            if (!Logs.ContainsKey(target)) return;
             Trace.Assert(target != null);
             List<FlowDocument> docs = new List<FlowDocument>() { Logs[target], GlobalLog };
             if (source != null) docs.Add(Logs[source]);
@@ -139,6 +142,7 @@ namespace Sanguosha.UI.Controls
 
         public void AppendDeathLog(Player p, Player by)
         {
+            if (!Logs.ContainsKey(p)) return;
             List<FlowDocument> docs = new List<FlowDocument>() { Logs[p], GlobalLog };
             if (by != null) docs.Add(Logs[by]);
             foreach (var doc in docs)
@@ -158,6 +162,7 @@ namespace Sanguosha.UI.Controls
 
         internal void AppendMultipleChoiceLog(Player p, string answer)
         {
+            if (!Logs.ContainsKey(p)) return;
             List<FlowDocument> docs = new List<FlowDocument>() { Logs[p], GlobalLog };
             foreach (var doc in docs)
             {
@@ -175,6 +180,7 @@ namespace Sanguosha.UI.Controls
 
         internal void AppendLoseHealthLog(Player player, int delta)
         {
+            if (!Logs.ContainsKey(player)) return;
             List<FlowDocument> docs = new List<FlowDocument>() { Logs[player], GlobalLog };
             foreach (var doc in docs)
             {
@@ -188,10 +194,42 @@ namespace Sanguosha.UI.Controls
 
         internal void AppendShowCardsLog(Player p, IList<Card> cards)
         {
+            if (!Logs.ContainsKey(p)) return;
             List<FlowDocument> docs = new List<FlowDocument>() { Logs[p], GlobalLog };
             foreach (var doc in docs)
             {
                 Paragraph para = LogFormatter.RichTranslateShowCards(p, cards);
+                if (para != null)
+                {
+                    doc.Blocks.Add(para);
+                }
+            }
+        }
+
+        internal void AppendReforgeLog(Player p, ICard card)
+        {
+            if (!Logs.ContainsKey(p)) return;
+            List<FlowDocument> docs = new List<FlowDocument>() { Logs[p], GlobalLog };
+            foreach (var doc in docs)
+            {
+                Paragraph para = LogFormatter.RichTranslateReforgeCard(p, card);
+                if (para != null)
+                {
+                    doc.Blocks.Add(para);
+                }
+            }
+        }
+
+        public void AppendLogEvent(List<Player> players, Prompt custom, bool useUICard = true)
+        {
+            var docs = (from pair in Logs
+                        where players.Contains(pair.Key)
+                        select pair.Value).Concat(new List<FlowDocument>() { GlobalLog });
+
+            foreach (var doc in docs)
+            {
+                Paragraph para = new Paragraph();
+                para.Inlines.AddRange(LogFormatter.TranslateLogEvent(custom, useUICard));
                 if (para != null)
                 {
                     doc.Blocks.Add(para);
@@ -232,7 +270,7 @@ namespace Sanguosha.UI.Controls
                 {
                     doc.Blocks.Add(para);
                 }
-            }            
+            }
         }
     }
 }

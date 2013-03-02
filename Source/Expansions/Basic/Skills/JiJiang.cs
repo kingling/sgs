@@ -19,6 +19,14 @@ namespace Sanguosha.Expansions.Basic.Skills
     /// </summary>
     public class JiJiang : CardTransformSkill
     {
+        protected override int GenerateSpecialEffectHintIndex(Player source, List<Player> targets, CompositeCard card)
+        {
+            if (source.Hero.Name == "LiuShan" || source.Hero2 != null && source.Hero2.Name == "LiuShan") return 1;
+            return 0;
+        }
+
+        public static PlayerAttribute JiJiangFailed = PlayerAttribute.Register("JiJiangFailed", true);
+
         public JiJiang()
         {
             IsRulerOnly = true;
@@ -26,6 +34,7 @@ namespace Sanguosha.Expansions.Basic.Skills
         public override VerifierResult TryTransform(List<Card> cards, object arg, out CompositeCard card)
         {
             card = null;
+            if (Owner[JiJiangFailed] == 1 && Game.CurrentGame.LastAction is JiJiang && Game.CurrentGame.LastAction.Owner == Owner) return VerifierResult.Fail;
             if (cards != null && cards.Count != 0)
             {
                 return VerifierResult.Fail;
@@ -99,11 +108,13 @@ namespace Sanguosha.Expansions.Basic.Skills
                 }
             }
 
+            Game.CurrentGame.LastAction = this;
             if (noAnswer)
             {
+                Owner[JiJiangFailed] = 1;
                 return false;
             }
-
+            Owner[JiJiangFailed] = 0;
             Trace.Assert(result != null);
             card.Subcards = new List<Card>();
             if (result is CompositeCard)
@@ -125,7 +136,7 @@ namespace Sanguosha.Expansions.Basic.Skills
             get { return new List<CardHandler>() { new Sha() }; }
         }
 
-        protected override void NotifyAction(Player source, List<Player> targets, CompositeCard card)
+        public override void NotifyAction(Player source, List<Player> targets, CompositeCard card)
         {
             ActionLog log = new ActionLog();
             log.GameAction = GameAction.None;
@@ -133,7 +144,7 @@ namespace Sanguosha.Expansions.Basic.Skills
             log.SkillAction = this;
             log.Source = source;
             log.Targets = targets;
-            log.UseIndexLine = true;
+            log.ShowCueLine = true;
             log.SpecialEffectHint = GenerateSpecialEffectHintIndex(source, targets, card);
             Game.CurrentGame.NotificationProxy.NotifySkillUse(log);
         }

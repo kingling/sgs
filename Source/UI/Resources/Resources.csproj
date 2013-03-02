@@ -31,7 +31,8 @@
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <OutputPath>..\..\..\Bin\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
+    <DefineConstants>
+    </DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
@@ -52,9 +53,6 @@
     <Reference Include="WindowsBase" />
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
-    <Reference Include="WPFToolkit.Extended, Version=1.8.0.0, Culture=neutral, PublicKeyToken=3e4669d2f30244f4">
-      <HintPath>..\..\..\Lib\WPFToolkit.Extended.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="FileNameToImageSourceConverter.cs" />
@@ -145,10 +143,12 @@
     <Resource Include="Images\Cards\Suit\heart2.png" />
     <Resource Include="Images\Cards\Suit\spade.png" />
     <Resource Include="Images\Cards\Suit\spade2.png" />
+    <Resource Include="Images\CornerAdorners\2.png" />
     <Resource Include="Images\Game\infoPlaneBody.png" />
     <Resource Include="Images\Game\infoPlaneFooter.png" />
     <Resource Include="Images\Game\infoPlaneHeader.png" />
     <Resource Include="Images\Game\infoPlaneSplitter.png" />
+    <Resource Include="Images\Game\progressBarIndicator.png" />
     <Resource Include="Images\Game\saveMe.png" />
     <Resource Include="Images\Lobby\buttonDock.png" />
     <Resource Include="Images\Lobby\notch.png" />
@@ -163,17 +163,16 @@
     <Resource Include="Images\PlayerInfoView\decoration2.png" />
     <Resource Include="Images\PlayerInfoView\dragon.png" />
     <Resource Include="Images\PlayerInfoView\imprisoned.png" />
-    <Resource Include="Images\PlayerInfoView\profileBg.png" />
     <Resource Include="Images\PlayerInfoView\smallSquare.png" />
     <Resource Include="Images\SystemImages.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Resource>
-    <Resource Include="Images\System\cornerAdorner.png" />
     <Resource Include="Images\System\Dropdown-hover.png" />
     <Resource Include="Images\System\Dropdown-normal.png" />
     <Resource Include="Images\System\Tick.png" />
     <Resource Include="Images\System\Tick2.png" />
+    <Resource Include="Images\System\Tick3.png" />
     <Resource Include="Images\System\WindowBg.jpg" />
   </ItemGroup>
   <ItemGroup>
@@ -224,13 +223,9 @@
     <Resource Include="Images\Roles\rebel.png" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Images\Allegiances\god2.png" />
     <Resource Include="Images\Allegiances\qun2.png" />
     <Resource Include="Images\Allegiances\shu2.png" />
     <Resource Include="Images\Allegiances\wu2.png" />
-  </ItemGroup>
-  <ItemGroup>
-    <Resource Include="Images\Allegiances\god.png" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Images\HealthBar\numbers.png" />
@@ -760,6 +755,39 @@
   <ItemGroup>
     <Resource Include="Images\MainPlayerInfoView\leftBg.png" />
     <Resource Include="Images\MainPlayerInfoView\middleBg.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Cards\Normal\XiahouBa.jpg" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Buttons\skill\enforced\hover-left.png" />
+    <Resource Include="Images\Buttons\skill\enforced\hover-middle.png" />
+    <Resource Include="Images\Buttons\skill\enforced\hover-right.png" />
+    <Resource Include="Images\Buttons\skill\enforced\normal-left.png" />
+    <Resource Include="Images\Buttons\skill\enforced\normal-middle.png" />
+    <Resource Include="Images\Buttons\skill\enforced\normal-right.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Cards\Rank\Ranks.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\PlayerInfoView\bg.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\PlayerInfoView\bg-fade.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\MainPlayerInfoView\blackBg.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\PlayerInfoView\heroSeparator.png" />
+    <Resource Include="Images\PlayerInfoView\secondaryHeroMask.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\Cards\Normal\QunLingJu.jpg" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Images\CornerAdorners\1.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

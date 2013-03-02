@@ -13,6 +13,7 @@ namespace Sanguosha.Lobby.Core
         public bool CheatEnabled { get; set; }
         public int NumberOfDefectors { get; set; }
         public List<Account> Accounts;
-
+        public bool DualHeroMode { get; set; }
+        public int NumHeroPicks { get; set; }
     }
 }

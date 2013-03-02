@@ -21,7 +21,7 @@ namespace Sanguosha.Expansions.Wind.Skills
     {
         public void OnJudgeBegin(Player player, GameEvent gameEvent, GameEventArgs eventArgs)
         {
-            if (Game.CurrentGame.Decks[player, DeckType.Hand].Count == 0)
+            if (player.HandCards().Count == 0 && !player.Equipments().Any(card => card.SuitColor == SuitColorType.Black))
             {
                 return;
             }
@@ -35,7 +35,7 @@ namespace Sanguosha.Expansions.Wind.Skills
                 Card theCard = cards[0];
                 theCard.Log = new ActionLog();
                 theCard.Log.Source = player;
-                theCard.Log.SkillAction = skill;
+                theCard.Log.SkillAction = this;
                 theCard.Log.GameAction = GameAction.ReplaceJudge;
                 Game.CurrentGame.EnterAtomicContext();
                 List<Card> toDiscard = new List<Card>() {Game.CurrentGame.Decks[eventArgs.Source, DeckType.JudgeResult].Last()};

@@ -19,6 +19,8 @@ namespace Sanguosha.Core.Skills
         public TriggerSkill()
         {
             Triggers = new Dictionary<GameEvent, Trigger>();
+            DeckCleanup = new List<DeckType>();
+            AttributeCleanup = new List<PlayerAttribute>();
         }
 
         public void NotifySkillUse(List<Player> targets)
@@ -30,6 +32,7 @@ namespace Sanguosha.Core.Skills
             log.Targets = targets;
             log.SpecialEffectHint = GenerateSpecialEffectHintIndex(Owner, targets);
             Games.Game.CurrentGame.NotificationProxy.NotifySkillUse(log);
+            if (IsSingleUse || IsAwakening) Core.Utils.GameDelays.Delay(Utils.GameDelayTypes.Awaken);
         }
 
         protected virtual int GenerateSpecialEffectHintIndex(Player source, List<Player> targets)
@@ -137,6 +140,7 @@ namespace Sanguosha.Core.Skills
                         Skill.NotifySkillUse(players);
                     }
                     Execute(Owner, gameEvent, eventArgs, cards, players);
+                    Game.CurrentGame.NotificationProxy.NotifyActionComplete();
                 }
             }
 
@@ -208,6 +212,7 @@ namespace Sanguosha.Core.Skills
                         Skill.NotifySkillUse(new List<Player>());
                     }
                     InnerTrigger.Execute(Owner, gameEvent, eventArgs);
+                    Game.CurrentGame.NotificationProxy.NotifyActionComplete();
                 }
             }
 
@@ -235,6 +240,8 @@ namespace Sanguosha.Core.Skills
                 pair.Value.Owner = owner;
                 Game.CurrentGame.RegisterTrigger(pair.Key, pair.Value);
             }
+            foreach (var dk in DeckCleanup) Game.CurrentGame.RegisterSkillCleanup(this, dk);
+            foreach (var att in AttributeCleanup) Game.CurrentGame.RegisterMarkCleanup(this, att);
             _isTriggerInstalled = true;
         }
 
@@ -249,6 +256,9 @@ namespace Sanguosha.Core.Skills
                 Game.CurrentGame.UnregisterTrigger(pair.Key, pair.Value);
             }
         }
+
+        protected List<DeckType> DeckCleanup { get; private set; }
+        protected List<PlayerAttribute> AttributeCleanup { get; private set; }
 
         protected IDictionary<GameEvent, Trigger> Triggers
         {

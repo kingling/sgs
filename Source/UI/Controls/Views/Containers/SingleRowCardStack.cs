@@ -17,6 +17,28 @@ namespace Sanguosha.UI.Controls
             cardEndDragHandler = new EventHandler(card_OnDragEnd);
             cardMouseEnterHandler = new MouseEventHandler(card_MouseEnter);
             cardMouseLeaveHandler = new MouseEventHandler(card_MouseLeave);
+            IsDraggingHandled = true;
+            registeredCards = new HashSet<CardView>();
+            this.Unloaded += SingleRowCardStack_Unloaded;
+        }
+
+        void SingleRowCardStack_Unloaded(object sender, System.Windows.RoutedEventArgs e)
+        {
+            foreach (var card in registeredCards)
+            {
+                card.OnDragBegin -= cardBeginDragHandler;
+                card.OnDragging -= cardDraggingHandler;
+                card.OnDragEnd -= cardEndDragHandler;
+                card.MouseEnter -= cardMouseEnterHandler;
+                card.MouseLeave -= cardMouseLeaveHandler;
+            }
+            registeredCards.Clear();
+        }
+
+        public bool IsDraggingHandled
+        {
+            get;
+            set;
         }
 
         private MouseEventHandler cardMouseLeaveHandler;
@@ -25,6 +47,8 @@ namespace Sanguosha.UI.Controls
         private EventHandler cardDraggingHandler;
         private EventHandler cardEndDragHandler;
 
+        HashSet<CardView> registeredCards;
+
         protected override void RegisterCardEvents(CardView card)
         {
             card.OnDragBegin += cardBeginDragHandler;
@@ -32,9 +56,10 @@ namespace Sanguosha.UI.Controls
             card.OnDragEnd += cardEndDragHandler;
             card.MouseEnter += cardMouseEnterHandler;
             card.MouseLeave += cardMouseLeaveHandler;
+            registeredCards.Add(card);
         }
 
-        protected override void UnRegisterCardEvents(CardView card)
+        protected override void UnregisterCardEvents(CardView card)
         {
             if (card == InteractingCard)
             {
@@ -52,6 +77,7 @@ namespace Sanguosha.UI.Controls
             card.OnDragEnd -= cardEndDragHandler;
             card.MouseEnter -= cardMouseEnterHandler;
             card.MouseLeave -= cardMouseLeaveHandler;
+            registeredCards.Remove(card);
         }
 
         #region Drag and Drop, Highlighting
@@ -93,6 +119,7 @@ namespace Sanguosha.UI.Controls
 
         void card_OnDragEndUnlock()
         {
+            if (!IsDraggingHandled) return;
             Trace.TraceInformation("DragEnd");
             int newPos = InteractingCardIndex;
             CardStatus = CardInteraction.None;            
@@ -113,6 +140,7 @@ namespace Sanguosha.UI.Controls
         public event HandCardMovedHandler OnHandCardMoved;
         void card_OnDragEnd(object sender, EventArgs e)
         {
+            if (!IsDraggingHandled) return;
             if (CardStatus == CardInteraction.Drag)
             {
                 lock (Cards)
@@ -125,6 +153,7 @@ namespace Sanguosha.UI.Controls
 
         void card_OnDragging(object sender, EventArgs e)
         {
+            if (!IsDraggingHandled) return;
             if (CardStatus == CardInteraction.Drag)
             {
                 lock (Cards)
@@ -136,6 +165,7 @@ namespace Sanguosha.UI.Controls
 
         void card_OnDragBegin(object sender, EventArgs e)
         {
+            if (!IsDraggingHandled) return;
             if (CardStatus == CardInteraction.MouseMove)
             {
                 lock (Cards)

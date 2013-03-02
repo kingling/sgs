@@ -13,14 +13,16 @@ namespace Sanguosha.Core.UI
 
     public class CardUsagePrompt : Prompt
     {
-        public CardUsagePrompt(string key, params object[] args) : base(CardUsagePromptsPrefix + key, args)
+        public CardUsagePrompt(string key, params object[] args)
+            : base(CardUsagePromptsPrefix + key, args)
         {
         }
     }
 
     public class CardChoicePrompt : Prompt
     {
-        public CardChoicePrompt(string key, params object[] args) : base(CardChoicePromptsPrefix + key, args)
+        public CardChoicePrompt(string key, params object[] args)
+            : base(CardChoicePromptsPrefix + key, args)
         {
         }
     }
@@ -36,9 +38,25 @@ namespace Sanguosha.Core.UI
     public class OptionPrompt : Prompt
     {
         public OptionPrompt(string key, params object[] args)
-            :base(MultipleChoiceOptionPrefix + key, args)
+            : base(MultipleChoiceOptionPrefix + key, args)
         {
 
+        }
+    }
+
+    public class LogEvent : Prompt
+    {
+        public LogEvent(string key, params object[] args)
+            : base(LogEventPrefix + key, args)
+        {
+        }
+    }
+
+    public class LogEventArg : Prompt
+    {
+        public LogEventArg(string key, params object[] args)
+            : base(LogEventArgPrefix + key, args)
+        {
         }
     }
 
@@ -51,7 +69,8 @@ namespace Sanguosha.Core.UI
 
         List<object> _values;
 
-        public Prompt(string resourceKey, params object[] args) : this()
+        public Prompt(string resourceKey, params object[] args)
+            : this()
         {
             ResourceKey = resourceKey;
             _values.AddRange(args);
@@ -85,8 +104,14 @@ namespace Sanguosha.Core.UI
         public static readonly string CardChoicePromptsPrefix = "CardChoice.Prompt.";
         #endregion
 
-        #region Multiple Choice Constants
+        #region Log Event
         public static readonly string LogEventPrefix = "LogEvent.";
+        public static readonly string LogEventArgPrefix = "LogEvent.Arg.";
+        public static readonly LogEventArg Success = new LogEventArg("Success");
+        public static readonly LogEventArg Fail = new LogEventArg("Fail");
+        #endregion
+
+        #region Multiple Choice Constants
         public static readonly string MultipleChoicePromptPrefix = "MultiChoice.Prompt.";
         public static readonly string MultipleChoiceOptionPrefix = "MultiChoice.Choice.";
         public static readonly string NonPlaybleAppendix = ".Others";

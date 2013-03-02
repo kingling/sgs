@@ -9,6 +9,7 @@ using Sanguosha.Core.Cards;
 using Sanguosha.Core.UI;
 using Sanguosha.Core.Exceptions;
 using Sanguosha.Core.Players;
+using Sanguosha.Core.Heroes;
 
 namespace Sanguosha.Core.Skills
 {
@@ -27,7 +28,6 @@ namespace Sanguosha.Core.Skills
         public CardTransformSkill()
         {
             LinkedPassiveSkill = null;
-            ExtraCardsDeck = null;
             Helper = new UiHelper();
         }
 
@@ -82,7 +82,8 @@ namespace Sanguosha.Core.Skills
         /// <remarks>
         /// 断粮和疬火同时拥有卡牌转换技和被动技成分，故设置此成员变量
         /// </remarks>
-        protected PassiveSkill LinkedPassiveSkill { get; set; }
+        public PassiveSkill LinkedPassiveSkill { get; protected set; }
+        public Hero HeroTag { get; set; }
 
         Players.Player owner;
         public virtual Players.Player Owner
@@ -94,6 +95,7 @@ namespace Sanguosha.Core.Skills
                 owner = value;
                 if (LinkedPassiveSkill != null)
                 {
+                    LinkedPassiveSkill.HeroTag = HeroTag;
                     LinkedPassiveSkill.Owner = value;
                 }
             }
@@ -101,13 +103,12 @@ namespace Sanguosha.Core.Skills
 
         public virtual List<CardHandler> PossibleResults { get { return null; } }
 
-        public DeckType ExtraCardsDeck { get; protected set; }
         public bool IsRulerOnly { get; protected set; }
         public bool IsSingleUse { get; protected set; }
         public bool IsAwakening { get; protected set; }
         public bool IsEnforced { get { return false; } }
 
-        protected virtual void NotifyAction(Players.Player source, List<Players.Player> targets, CompositeCard card)
+        public virtual void NotifyAction(Players.Player source, List<Players.Player> targets, CompositeCard card)
         {
             ActionLog log = new ActionLog();
             log.GameAction = GameAction.None;

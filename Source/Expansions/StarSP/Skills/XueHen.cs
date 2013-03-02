@@ -50,7 +50,9 @@ namespace Sanguosha.Expansions.StarSP.Skills
             Player current = Game.CurrentGame.CurrentPlayer;
             int choiceCount = Owner.LostHealth;
             int currentPlayerCardsCount = current.HandCards().Count + current.Equipments().Count();
-            bool canUseSha = Game.CurrentGame.AlivePlayers.Any(p => Game.CurrentGame.PlayerCanBeTargeted(Owner, new List<Player>() { p }, new Card() { Place = new DeckPlace(Owner, DeckType.None), Type = new Sha() }));
+            List<Player> shaCheck = Game.CurrentGame.AlivePlayers;
+            shaCheck.Remove(Owner);
+            bool canUseSha = Game.CurrentGame.PlayerCanBeTargeted(Owner, shaCheck, new Card() { Place = new DeckPlace(Owner, DeckType.None), Type = new Sha() });
             if (canUseSha)
             {
                 List<OptionPrompt> prompts = new List<OptionPrompt>();
@@ -93,23 +95,10 @@ namespace Sanguosha.Expansions.StarSP.Skills
             }
             else
             {
-                ISkill skill;
-                List<Card> cards;
-                List<Player> players;
-                if (!Owner.AskForCardUsage(new CardUsagePrompt("XueHen"), new XueHenShaVerifier(), out skill, out cards, out players))
-                {
-                    players = new List<Player>();
-                    List<Player> nPlayers = Game.CurrentGame.AlivePlayers;
-                    players.Add(nPlayers[0]);
-                }
                 XueHenEffect = 1;
-                NotifySkillUse(players);
-                GameEventArgs args = new GameEventArgs();
+                NotifySkillUse();
                 Owner[Sha.NumberOfShaUsed]--;
-                args.Source = Owner;
-                args.Targets = players;
-                args.Skill = new CardWrapper(Owner, new RegularSha(), false);
-                Game.CurrentGame.Emit(GameEvent.CommitActionToTargets, args);
+                Sha.UseDummyShaTo(Owner, null, new RegularSha(), new CardUsagePrompt("XueHen"), XueHenSha);
             }
         }
 
@@ -122,8 +111,22 @@ namespace Sanguosha.Expansions.StarSP.Skills
                 TriggerCondition.Global
             ) { IsAutoNotify = false };
             Triggers.Add(GameEvent.PhaseBeginEvents[TurnPhase.End], trigger);
+
+            var trigger2 = new AutoNotifyPassiveSkillTrigger(
+                this,
+                (p, e, a) => { return a.Card[XueHenSha] != 0; },
+                (p, e, a) =>
+                {
+                    ShaEventArgs args = a as ShaEventArgs;
+                    args.RangeApproval[0] = true;
+                },
+                TriggerCondition.OwnerIsSource
+            ) { AskForConfirmation = false, IsAutoNotify = false };
+            Triggers.Add(Sha.PlayerShaTargetValidation, trigger2);
+
             IsEnforced = true;
         }
         int XueHenEffect;
+        public static CardAttribute XueHenSha = CardAttribute.Register("XueHenSha");
     }
 }

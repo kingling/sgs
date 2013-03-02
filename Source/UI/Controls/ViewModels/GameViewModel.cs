@@ -41,7 +41,7 @@ namespace Sanguosha.UI.Controls
             {
                 if (_game == value) return;
                 _game = value;
-                _game.RegisterCurrentThread();
+                if (_game == null) return;
                 PlayerModels.Clear();
                 int i = 0;
                 foreach (var player in _game.Players)
